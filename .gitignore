@@ -1,0 +1,47 @@
+# Binaries and build outputs
+bin/
+build/bin/
+obj/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.out
+*.app
+*.dmg
+garmin-map
+zimap
+ZiMap
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dependency and cache directories
+vendor/
+cache/
+.cache/
+
+# Logs, scratch and temporary files
+*.log
+tmp/
+.tmp/
+scratch/
+.crush/
+.pi/
+
+# Output directory
+output/
+
+# Downloaded third-party runtimes and tools
+tools/jdk/
+tools/mkgmap/
+tools/splitter/
+tools/mtp/
