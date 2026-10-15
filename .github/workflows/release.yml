@@ -1,0 +1,182 @@
+name: Release ZiMap
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag name (e.g. v0.0.2)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, amd64]
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go Runtime
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install Frontend Dependencies
+        run: cd frontend && npm ci
+
+      - name: Compile MTP CLI Sidecar (zimap-mtp)
+        run: |
+          chmod +x scripts/build-mtp.sh
+          ./scripts/build-mtp.sh ${{ matrix.arch }}
+
+      - name: Build macOS Application Bundle
+        run: |
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          wails build -platform darwin/${{ matrix.arch }} -clean
+          
+          # Ensure sidecar is embedded in the built bundle
+          for app in build/bin/ZiMap.app build/bin/zimap.app; do
+            if [ -d "$app/Contents/MacOS" ]; then
+              echo "Embedding zimap-mtp into $app/Contents/MacOS/..."
+              cp tools/mtp/zimap-mtp "$app/Contents/MacOS/zimap-mtp"
+              chmod +x "$app/Contents/MacOS/zimap-mtp"
+            fi
+          done
+
+      - name: Archive macOS Bundle with Ditto
+        run: |
+          APP_PATH=""
+          if [ -d "build/bin/ZiMap.app" ]; then APP_PATH="build/bin/ZiMap.app"; fi
+          if [ -d "build/bin/zimap.app" ]; then APP_PATH="build/bin/zimap.app"; fi
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: Application bundle not found in build/bin!"
+            exit 1
+          fi
+          ditto -c -k --keepParent "$APP_PATH" "ZiMap-darwin-${{ matrix.arch }}.zip"
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: ZiMap-darwin-${{ matrix.arch }}.zip
+          retention-days: 1
+
+  build-windows:
+    name: Build Windows (amd64)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go Runtime
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          cache: true
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install Frontend Dependencies
+        run: cd frontend && npm ci
+
+      - name: Build Windows Executable
+        shell: pwsh
+        run: |
+          $wailsBin = Join-Path (go env GOPATH) "bin\wails.exe"
+          if (Test-Path $wailsBin) {
+            & $wailsBin build -platform windows/amd64 -clean
+          } else {
+            wails build -platform windows/amd64 -clean
+          }
+
+      - name: Package Windows ZIP Archive
+        shell: pwsh
+        run: |
+          $exePath = "build/bin/ZiMap.exe"
+          if (-not (Test-Path $exePath)) {
+            $exePath = "build/bin/zimap.exe"
+          }
+          if (-not (Test-Path $exePath)) {
+            $exePath = "build/bin/garmin-map.exe"
+          }
+          if (-not (Test-Path $exePath)) {
+            Write-Error "Windows executable not found in build/bin!"
+            exit 1
+          }
+          Compress-Archive -Path $exePath -DestinationPath ZiMap-windows-amd64.zip
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-amd64
+          path: ZiMap-windows-amd64.zip
+          retention-days: 1
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Download All Release Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Determine Release Tag
+        id: release_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: ZiMap ${{ steps.release_tag.outputs.tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-assets/ZiMap-darwin-arm64.zip
+            release-assets/ZiMap-darwin-amd64.zip
+            release-assets/ZiMap-windows-amd64.zip

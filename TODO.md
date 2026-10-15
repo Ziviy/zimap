@@ -4,8 +4,8 @@ This document tracks planned improvements, bug fixes, and feature additions for 
 
 **Progress Tracker**:
 - **Total Tasks**: 52
-- **Completed**: 48 (`#1`, `#2`, `#3`, `#4`, `#5`, `#6`, `#7`, `#8`, `#9`, `#10`, `#11`, `#12`, `#13`, `#14`, `#15`, `#16`, `#17`, `#18`, `#19`, `#20`, `#21`, `#22`, `#23`, `#24`, `#25`, `#26`, `#27`, `#28`, `#29`, `#30`, `#31`, `#32`, `#33`, `#34`, `#35`, `#36`, `#37`, `#38`, `#40`, `#41`, `#42`, `#43`, `#45`, `#47`, `#48`, `#49`, `#50`, `#51`)
-- **Active / Pending**: 4 (`#39`, `#44`, `#46`, `#52`)
+- **Completed**: 49 (`#1`, `#2`, `#3`, `#4`, `#5`, `#6`, `#7`, `#8`, `#9`, `#10`, `#11`, `#12`, `#13`, `#14`, `#15`, `#16`, `#17`, `#18`, `#19`, `#20`, `#21`, `#22`, `#23`, `#24`, `#25`, `#26`, `#27`, `#28`, `#29`, `#30`, `#31`, `#32`, `#33`, `#34`, `#35`, `#36`, `#37`, `#38`, `#40`, `#41`, `#42`, `#43`, `#45`, `#47`, `#48`, `#49`, `#50`, `#51`, `#52`)
+- **Active / Pending**: 3 (`#39`, `#44`, `#46`)
 
 ---
 
@@ -66,25 +66,31 @@ This document tracks planned improvements, bug fixes, and feature additions for 
 
 ---
 
-### 52. Automated CI/CD Release Pipeline via GitHub Actions & In-App Auto-Update Integration
+## ✅ Completed Tasks & Changelog
+
+### 52. Automated CI/CD Release Pipeline via GitHub Actions & In-App Auto-Update Integration [COMPLETED]
 - **Implementation Plan**: 📄 [Подробный архитектурный план реализации (docs/plans/task-52-github-actions-release.md)](docs/plans/task-52-github-actions-release.md)
 - **User Requirement**: Build and publish releases to GitHub automatically upon tag creation so the application can self-update seamlessly across macOS and Windows.
-- **Technical Scope**:
-  - **Workflow Configuration (`.github/workflows/release.yml`)**: Multi-platform matrix build (macOS arm64/amd64 on `macos-14`, Windows amd64 on `windows-2022`).
-  - **Sidecar Integration**: Automated compilation of `zimap-mtp` and embedding into `Contents/MacOS/` for macOS bundles.
-  - **Asset Naming Parity**: Exact alignment with `scoreAsset` in `app_updater.go` (`ZiMap-darwin-arm64.zip`, `ZiMap-darwin-amd64.zip`, `ZiMap-windows-amd64.zip`).
-  - **Release Publishing**: Automatic GitHub Release creation via `softprops/action-gh-release@v2` with generated changelog notes and public release flags (`draft: false`, `prerelease: false`).
-- **Affected Files**:
-  - `.github/workflows/release.yml`
-  - `docs/plans/task-52-github-actions-release.md`
-  - `app_updater.go`
-  - `Makefile`
-  - `TODO.md`
-  - `AGENTS.md`
+- **Resolution**:
+  - **Workflow Configuration (`.github/workflows/release.yml`)**:
+    - Multi-platform matrix build for macOS (`arm64` and `amd64`) on `macos-latest` and Windows (`amd64`) on `windows-2022`.
+    - Triggers on tag pushes matching `v*` and manual `workflow_dispatch`.
+    - Permissions set to `contents: write` for automated release publication.
+  - **Sidecar Integration & Cross-Compilation (`scripts/build-mtp.sh`)**:
+    - Enhanced `scripts/build-mtp.sh` to support cross-compilation (`arm64`, `amd64`) and static linking of `libusb` on macOS.
+    - Zero external runtime dylib dependencies on end-user machines: statically links `libusb-1.0.a` with macOS system frameworks (`IOKit`, `CoreFoundation`, `Security`, `libobjc`).
+    - Embeds `zimap-mtp` binary directly into `Contents/MacOS/` inside the macOS application bundle.
+  - **Asset Naming & Updater Parity**:
+    - Exact matching with `scoreAsset` in `app_updater.go`: produces `ZiMap-darwin-arm64.zip`, `ZiMap-darwin-amd64.zip`, and `ZiMap-windows-amd64.zip`.
+    - Preserves macOS permissions and bundle attributes using `/usr/bin/ditto -c -k --keepParent`.
+  - **Release Publishing**:
+    - Aggregates all matrix artifacts via `actions/download-artifact@v4`.
+    - Publishes release via `softprops/action-gh-release@v2` with `draft: false`, `prerelease: false`, and automatic changelog notes generation.
+  - **Local Packaging Target (`Makefile`)**:
+    - Added `make release-local` target to locally build frontend, sidecar, desktop app, and ditto zip bundle in seconds.
+- **Files Modified**: `.github/workflows/release.yml`, `scripts/build-mtp.sh`, `Makefile`, `TODO.md`, `AGENTS.md`.
 
 ---
-
-## ✅ Completed Tasks & Changelog
 
 ### 51. Automated MTP File Transfer for GPS Smartwatches on macOS (Sidecar Architecture) [COMPLETED]
 - **Implementation Plan**: 📄 [Подробный архитектурный план реализации (docs/plans/task-51-macos-mtp-sync.md)](docs/plans/task-51-macos-mtp-sync.md)

@@ -1,11 +1,11 @@
-.PHONY: all test test-backend test-frontend build build-mtp clean
+.PHONY: all test test-backend test-frontend build build-mtp release-local clean
 
 all: test build
 
 build-mtp:
 	@mkdir -p tools/mtp
 	@echo "==> Compiling zimap-mtp sidecar binary..."
-	go build -o tools/mtp/zimap-mtp ./cmd/zimap-mtp
+	./scripts/build-mtp.sh
 	@echo "==> zimap-mtp compiled successfully into tools/mtp/zimap-mtp"
 
 test-backend: build-mtp
@@ -33,5 +33,20 @@ build: build-mtp
 		fi \
 	done
 
+release-local: build
+	@echo "==> Packaging local release archive..."
+	@APP_PATH=""; \
+	if [ -d "build/bin/ZiMap.app" ]; then APP_PATH="build/bin/ZiMap.app"; \
+	elif [ -d "build/bin/zimap.app" ]; then APP_PATH="build/bin/zimap.app"; fi; \
+	if [ -z "$$APP_PATH" ]; then \
+		echo "Error: Application bundle not found in build/bin!"; \
+		exit 1; \
+	fi; \
+	ARCH=$$(go env GOARCH); \
+	OUT_ZIP="ZiMap-darwin-$${ARCH}.zip"; \
+	ditto -c -k --keepParent "$$APP_PATH" "$$OUT_ZIP"; \
+	echo "==> Successfully packaged $$OUT_ZIP"
+
 clean:
-	rm -rf build/bin tools/mtp/zimap-mtp frontend/dist
+	rm -rf build/bin tools/mtp/zimap-mtp frontend/dist *.zip
+

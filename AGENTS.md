@@ -191,7 +191,7 @@ The binary must function both as a desktop GUI and as a headless CLI tool:
 
 Consult [`TODO.md`](TODO.md) for the active task backlog.
 
-### ✅ Completed Tasks (48 of 51):
+### ✅ Completed Tasks (49 of 52):
 - **macOS Window Dragging & IPC (Task 1)**: Full `--wails-draggable: drag` implementation with clean 48px top strip and non-blocking IPC calls.
 - **Catalog Caching (Task 2)**: Two-tier caching (in-memory + disk cache in `cache/geofabrik-index.json`, 24h TTL) with `ForceRefreshCatalog()`.
 - **Accurate Tools & Java Detection (Task 3)**: `JavaDetails()` and `ToolDetails()` distinguish embedded `tools/jdk` from system Java in `PATH`, showing file paths and check animations.
@@ -238,12 +238,12 @@ Consult [`TODO.md`](TODO.md) for the active task backlog.
 - **Dedicated GPS Device Tab (Task 19)**: Cross-platform volume detection (`/Volumes/*`, Windows drives, Linux mounts), XML manifest parsing (`GarminDevice.xml`), .img header internal title reading (offset 0x49), device storage meter bar, safe ejection, system maps protection (TopoActive, basemap, timezone blacklist), and MTP diagnostic guidance banner.
 - **Map Freshness Check & Sync (Task 20)**: Real-time map freshness comparison against local builds with FAT32 2-second timestamp tolerance, 4-status classification, safe streaming copy with progress and cancellation, `fsync()` persistence, `os.Chtimes` timestamp synchronization, batch "Sync All" queue, and Apple HIG comparison cards.
 - **Automated macOS MTP File Transfer (Task 51)**: Standalone CLI sidecar (`cmd/zimap-mtp`) powered by `ganeshrvel/go-mtpx`, non-blocking JSON event streaming, detection of MTP smartwatches (Fenix, Epix, Forerunner) on macOS, USB port conflict handling (Official Sync App), Apple HIG `.badge-mtp` and direct one-click map upload/sync.
+- **GitHub Actions Release CI/CD (Task 52)**: Multi-platform automated matrix build (`macos-latest` arm64 & amd64 with embedded MTP sidecar, `windows-2022` amd64), static `libusb` zero-dependency bundling, asset naming parity with `scoreAsset` in `app_updater.go`, ditto bundle preservation, and GitHub Releases publishing.
 
-### 🎯 Active Backlog (4 Tasks Remaining):
+### 🎯 Active Backlog (3 Tasks Remaining):
 - **Notification App Icon (Task 39)**: Native bundle icon association in macOS notification banners.
 - **Output Format Selector (Task 44)**: Support multiple output formats (.img, BaseCamp/MapSource .gmapi).
 - **Self-Contained Storage & Packaging (Task 46)**: Standalone packaging without source code dependencies, hidden internal map storage.
-- **GitHub Actions Release CI/CD (Task 52)**: Multi-platform automated build (macOS arm64/amd64 with MTP sidecar, Windows amd64) and GitHub Releases publishing for seamless in-app self-updating.
 
 
 
