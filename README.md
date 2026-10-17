@@ -44,15 +44,16 @@ Pre-compiled standalone packages are available on the [GitHub Releases](https://
 - **macOS**: Download `ZiMap-darwin-arm64.zip` (Apple Silicon M1-M4) or `ZiMap-darwin-amd64.zip` (Intel). Extract the archive and drag `ZiMap.app` to your `/Applications` folder.
 - **Windows**: Download `ZiMap-windows-amd64.zip`. Extract the archive and run `ZiMap.exe`.
 
-*Note: Required Java runtime (Adoptium JDK 21) and compilation utilities (`mkgmap`, `splitter`) are automatically downloaded and managed by the app into a local `tools/` directory on first launch if not found in your system PATH.*
+*Note: The app can download and manage a Java 21 runtime and compilation utilities (`mkgmap`, `splitter`) in a local `tools/` directory. Install or repair them from the Tools screen or with `zimap update`; an existing Java installation in your system PATH can also be used.*
 
 ### Option 2: Build from Source
 
 #### Prerequisites
-- Go 1.22+
-- Node.js 18+ and npm
+- Go version required by [`go.mod`](go.mod) (currently 1.26.5+)
+- Node.js 22.x (22.12+) and npm, matching the current frontend toolchain and release CI
 - Wails v2: `go install github.com/wailsapp/wails/v2/cmd/wails@latest`
-- Java 21 runtime
+- Java runtime for map conversion (managed by the app or installed separately)
+- Native build dependencies for your platform; see the [architecture guide](docs/ARCHITECTURE.md) for libusb/MTP testing prerequisites
 
 #### Build Instructions
 
@@ -84,6 +85,14 @@ zimap download https://download.geofabrik.de/europe/germany/berlin-latest.osm.pb
 # Convert a local .osm.pbf file
 zimap convert ./path/to/region.osm.pbf --detail=high
 ```
+
+---
+
+## Architecture & Contributor Guide
+
+- [Architecture and module guide](docs/ARCHITECTURE.md): task-to-file index, module responsibilities, workflows, IPC/data contracts, storage, testing and packaging caveats.
+- [Agent and developer rules](AGENTS.md): contribution guidelines and safety requirements.
+- [Roadmap](TODO.md): planned work and completed task history.
 
 ---
 

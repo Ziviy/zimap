@@ -229,15 +229,10 @@ func (a *App) ListOutputs() ([]OutputItem, error) {
 	return items, nil
 }
 
-func (a *App) DeleteOutput(path string) error {
-	outputDir, err := setup.OutputDirectory()
+func outputMapPath(root *os.Root, path string) (string, error) {
+	absOutputDir, err := filepath.Abs(root.Name())
 	if err != nil {
-		return err
-	}
-
-	absOutputDir, err := filepath.Abs(outputDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve output directory: %w", err)
+		return "", fmt.Errorf("failed to resolve output directory: %w", err)
 	}
 
 	var absTarget string
@@ -249,35 +244,52 @@ func (a *App) DeleteOutput(path string) error {
 
 	rel, err := filepath.Rel(absOutputDir, absTarget)
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("access denied: path is outside output directory: %s", path)
+		return "", fmt.Errorf("access denied: path is outside output directory: %s", path)
 	}
 
-	// Check file exists and is not a directory
-	info, err := os.Stat(absTarget)
+	// Root keeps symlink resolution and subsequent file operations inside outputDir.
+	info, err := root.Stat(rel)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("map file does not exist: %w", err)
+		}
+		return "", fmt.Errorf("cannot access map file: %w", err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("target is a directory, not a file: %s", path)
+	}
+	if !strings.EqualFold(filepath.Ext(absTarget), ".img") {
+		return "", fmt.Errorf("file is not an .img map: %s", path)
+	}
+	return rel, nil
+}
+
+func (a *App) DeleteOutput(path string) error {
+	outputDir, err := setup.OutputDirectory()
 	if err != nil {
 		return err
 	}
-	if info.IsDir() {
-		return fmt.Errorf("target is a directory, not a file: %s", path)
+	root, err := os.OpenRoot(outputDir)
+	if err != nil {
+		return err
 	}
+	defer root.Close()
 
-	// Check file has .img extension (case-insensitive)
-	if !strings.EqualFold(filepath.Ext(absTarget), ".img") {
-		return fmt.Errorf("file is not an .img map: %s", path)
+	target, err := outputMapPath(root, path)
+	if err != nil {
+		return err
 	}
-
-	// Remove the .img file
-	if err := os.Remove(absTarget); err != nil {
+	if err := root.Remove(target); err != nil {
 		return fmt.Errorf("failed to delete map file: %w", err)
 	}
 
 	// Clean up companion .meta.json files
-	meta1 := absTarget + ".meta.json"
-	meta2 := strings.TrimSuffix(absTarget, filepath.Ext(absTarget)) + ".meta.json"
+	meta1 := target + ".meta.json"
+	meta2 := strings.TrimSuffix(target, filepath.Ext(target)) + ".meta.json"
 
-	_ = os.Remove(meta1)
+	_ = root.Remove(meta1)
 	if meta2 != meta1 {
-		_ = os.Remove(meta2)
+		_ = root.Remove(meta2)
 	}
 
 	return nil
@@ -334,6 +346,17 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	defer in.Close()
+	return copyOpenFile(in, dst)
+}
+
+func copyOpenFile(in *os.File, dst string) error {
+	info, err := in.Stat()
+	if err != nil {
+		return err
+	}
+	if destInfo, err := os.Stat(dst); err == nil && os.SameFile(info, destInfo) {
+		return nil
+	}
 
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return err
@@ -349,7 +372,10 @@ func copyFile(src, dst string) error {
 		return err
 	}
 
-	return out.Sync()
+	if err := out.Sync(); err != nil {
+		return err
+	}
+	return out.Close()
 }
 
 // ExportMap prompts the user with a native Save File Dialog and copies the compiled map (.img)
@@ -361,46 +387,29 @@ func (a *App) ExportMap(path string) (string, error) {
 		return "", err
 	}
 
-	absOutputDir, err := filepath.Abs(outputDir)
+	root, err := os.OpenRoot(outputDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve output directory: %w", err)
+		return "", err
 	}
+	defer root.Close()
 
-	var absSource string
-	if filepath.IsAbs(path) {
-		absSource = filepath.Clean(path)
-	} else {
-		candidate := filepath.Clean(filepath.Join(absOutputDir, path))
-		if _, err := os.Stat(candidate); os.IsNotExist(err) && !strings.EqualFold(filepath.Ext(candidate), ".img") {
-			if _, err2 := os.Stat(candidate + ".img"); err2 == nil {
-				candidate += ".img"
+	if !filepath.IsAbs(path) && !strings.EqualFold(filepath.Ext(path), ".img") {
+		if _, err := root.Stat(path); os.IsNotExist(err) {
+			if _, err := root.Stat(path + ".img"); err == nil {
+				path += ".img"
 			}
 		}
-		absSource = candidate
 	}
-
-	// Security validation: verify path is strictly within output directory
-	rel, err := filepath.Rel(absOutputDir, absSource)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("access denied: path is outside output directory: %s", path)
-	}
-
-	info, err := os.Stat(absSource)
+	sourcePath, err := outputMapPath(root, path)
 	if err != nil {
-		return "", fmt.Errorf("map file does not exist: %w", err)
-	}
-	if info.IsDir() {
-		return "", fmt.Errorf("target is a directory, not a file: %s", path)
-	}
-	if !strings.EqualFold(filepath.Ext(absSource), ".img") {
-		return "", fmt.Errorf("file is not an .img map: %s", path)
+		return "", err
 	}
 
 	if a.ctx == nil {
 		return "", fmt.Errorf("window context not initialized")
 	}
 
-	defaultName := filepath.Base(absSource)
+	defaultName := filepath.Base(sourcePath)
 
 	destPath, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
 		Title:           "Save Map As...",
@@ -430,16 +439,12 @@ func (a *App) ExportMap(path string) (string, error) {
 		return "", err
 	}
 
-	if strings.EqualFold(destAbs, absSource) {
-		return destAbs, nil
+	in, err := root.Open(sourcePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open map: %w", err)
 	}
-	if destInfo, err := os.Stat(destAbs); err == nil {
-		if os.SameFile(info, destInfo) {
-			return destAbs, nil
-		}
-	}
-
-	if err := copyFile(absSource, destAbs); err != nil {
+	defer in.Close()
+	if err := copyOpenFile(in, destAbs); err != nil {
 		return "", fmt.Errorf("failed to export map to %s: %w", destAbs, err)
 	}
 

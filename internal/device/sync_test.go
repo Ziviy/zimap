@@ -189,35 +189,46 @@ func TestSyncManager_ConcurrentGuard(t *testing.T) {
 	tmpDir := t.TempDir()
 	src := filepath.Join(tmpDir, "src.img")
 	dest := filepath.Join(tmpDir, "dest.img")
-	_ = os.WriteFile(src, []byte("data"), 0644)
+	if err := os.WriteFile(src, []byte("map data"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Launch first sync in goroutine
 	started := make(chan struct{})
-	done := make(chan struct{})
+	releaseCopy := make(chan struct{})
+	done := make(chan error, 1)
 
 	go func() {
-		_ = sm.Sync(ctx, src, dest, func(e SyncProgressEvent) {
-			select {
-			case started <- struct{}{}:
-			default:
+		done <- sm.Sync(ctx, src, dest, func(e SyncProgressEvent) {
+			if e.BytesCopied == 0 {
+				close(started)
+				// Hold the busy slot until the second call has checked the guard.
+				select {
+				case <-releaseCopy:
+				case <-ctx.Done():
+				}
 			}
 		})
-		close(done)
 	}()
 
-	<-started
+	select {
+	case <-started:
+	case err := <-done:
+		t.Fatalf("first sync ended before reporting progress: %v", err)
+	}
 
-	// Second sync attempt should fail with ErrSyncInProgress
 	err2 := sm.Sync(context.Background(), src, dest, nil)
 	if !errors.Is(err2, ErrSyncInProgress) {
 		t.Errorf("expected ErrSyncInProgress, got %v", err2)
 	}
 
 	sm.Cancel()
-	<-done
+	close(releaseCopy)
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Errorf("expected cancellation of first sync, got %v", err)
+	}
 
 	if sm.IsSyncing() {
 		t.Errorf("expected IsSyncing to be false after completion")

@@ -222,6 +222,9 @@ func (client *Client) downloadAttempt(ctx context.Context, fileUrl string, targe
 		return fmt.Errorf("close downloaded content for %s: %w", targetPath, err)
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err = replaceFile(temporaryPath, targetPath); err != nil {
 		return fmt.Errorf("install downloaded file at %s: %w", targetPath, err)
 	}
@@ -229,14 +232,14 @@ func (client *Client) downloadAttempt(ctx context.Context, fileUrl string, targe
 }
 
 type progressReader struct {
-	reader     io.Reader
-	total      int64
-	current    int64
-	startTime  time.Time
-	lastTime   time.Time
-	lastBytes  int64
-	speedBps   float64
-	progress   func(downloaded int64, total int64, speedBps float64)
+	reader    io.Reader
+	total     int64
+	current   int64
+	startTime time.Time
+	lastTime  time.Time
+	lastBytes int64
+	speedBps  float64
+	progress  func(downloaded int64, total int64, speedBps float64)
 }
 
 func (pr *progressReader) Read(p []byte) (int, error) {
@@ -248,9 +251,9 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 			pr.lastTime = now
 			pr.lastBytes = 0
 		}
-		
+
 		pr.current += int64(n)
-		
+
 		timeDelta := now.Sub(pr.lastTime)
 		if timeDelta.Seconds() >= 0.5 || pr.speedBps == 0 {
 			if timeDelta.Seconds() > 0 {
@@ -260,7 +263,7 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 			pr.lastTime = now
 			pr.lastBytes = pr.current
 		}
-		
+
 		if pr.progress != nil {
 			pr.progress(pr.current, pr.total, pr.speedBps)
 		}
@@ -288,36 +291,44 @@ func (client *Client) ContentLength(fileURL string) (int64, error) {
 }
 
 func replaceFile(sourcePath string, targetPath string) error {
+	info, statErr := os.Lstat(targetPath)
+	hasExistingTarget := statErr == nil
+	if statErr != nil && !os.IsNotExist(statErr) {
+		return statErr
+	}
+	if hasExistingTarget && info.IsDir() {
+		return fmt.Errorf("cannot replace directory %s with a downloaded file", targetPath)
+	}
+
+	if err := os.Rename(sourcePath, targetPath); err == nil {
+		return nil
+	} else if !hasExistingTarget {
+		return err
+	}
+
+	// Windows cannot rename over an existing file; retain a backup for rollback.
 	backupPath, err := os.CreateTemp(filepath.Dir(targetPath), ".previous-*")
 	if err != nil {
 		return err
 	}
 	backupName := backupPath.Name()
 	if err := backupPath.Close(); err != nil {
+		_ = os.Remove(backupName)
 		return err
 	}
 	if err := os.Remove(backupName); err != nil {
 		return err
 	}
-	defer os.Remove(backupName)
-
-	_, statErr := os.Stat(targetPath)
-	hasExistingTarget := statErr == nil
-	if statErr != nil && !os.IsNotExist(statErr) {
-		return statErr
-	}
-
-	if hasExistingTarget {
-		if err := os.Rename(targetPath, backupName); err != nil {
-			return err
-		}
+	if err := os.Rename(targetPath, backupName); err != nil {
+		return err
 	}
 
 	if err := os.Rename(sourcePath, targetPath); err != nil {
-		if hasExistingTarget {
-			_ = os.Rename(backupName, targetPath)
+		if restoreErr := os.Rename(backupName, targetPath); restoreErr != nil {
+			return fmt.Errorf("restore previous download (preserved at %s): %w", backupName, errors.Join(err, restoreErr))
 		}
 		return err
 	}
+	_ = os.Remove(backupName)
 	return nil
 }

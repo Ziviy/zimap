@@ -1,11 +1,40 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   isMapQueued,
   createQueueItem,
   enqueueJob,
   dequeueJob,
+  scheduleNextJob,
   removeJobFromQueue
 } from './queue.js';
+
+describe('queue scheduling', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('starts only the first job and leaves the queue untouched until the timer fires', () => {
+    vi.useFakeTimers();
+    const queue = [{ name: 'Germany' }, { name: 'France' }];
+    const startJob = vi.fn();
+
+    scheduleNextJob(queue, startJob);
+    expect(startJob).not.toHaveBeenCalled();
+    expect(queue).toHaveLength(2);
+
+    vi.runAllTimers();
+    expect(startJob).toHaveBeenCalledExactlyOnceWith(queue[0], [queue[1]]);
+    expect(queue).toHaveLength(2);
+  });
+
+  it('cancels a pending start when the effect is cleaned up', () => {
+    vi.useFakeTimers();
+    const startJob = vi.fn();
+    const cleanup = scheduleNextJob([{ name: 'Germany' }], startJob);
+
+    cleanup();
+    vi.runAllTimers();
+    expect(startJob).not.toHaveBeenCalled();
+  });
+});
 
 describe('queue utilities', () => {
   it('identifies if a map is queued case-insensitively and ignoring .img', () => {
@@ -20,6 +49,7 @@ describe('queue utilities', () => {
     expect(isMapQueued('moscow', queue)).toBe(true);
     expect(isMapQueued('france', queue)).toBe(false);
     expect(isMapQueued(null, queue)).toBe(false);
+    expect(isMapQueued('  ', queue)).toBe(false);
   });
 
   it('creates valid queue item with defaults', () => {
@@ -48,6 +78,15 @@ describe('queue utilities', () => {
     expect(q3.length).toBe(2);
   });
 
+  it('deduplicates jobs by URL as well as normalized map name', () => {
+    const item = createQueueItem('https://example.com/map.pbf', ' Germany.img ');
+    const queue = [item];
+
+    expect(enqueueJob(queue, createQueueItem(item.url, 'another name'))).toBe(queue);
+    expect(enqueueJob(queue, createQueueItem('https://example.com/other.pbf', 'GERMANY'))).toBe(queue);
+    expect(isMapQueued(' germany ', queue)).toBe(true);
+  });
+
   it('dequeues next job in FIFO order', () => {
     const item1 = createQueueItem('https://example.com/1.pbf', 'italy');
     const item2 = createQueueItem('https://example.com/2.pbf', 'spain');
@@ -61,6 +100,17 @@ describe('queue utilities', () => {
     const empty = dequeueJob([]);
     expect(empty.nextJob).toBeNull();
     expect(empty.remainingQueue).toEqual([]);
+  });
+
+  it('removes jobs by URL or normalized map name without changing the original queue', () => {
+    const queue = [
+      { id: 'job-1', name: 'Germany.img', url: 'https://example.com/de.pbf' },
+      { id: 'job-2', name: 'France', url: 'https://example.com/fr.pbf' },
+    ];
+
+    expect(removeJobFromQueue(queue, queue[0].url)).toEqual([queue[1]]);
+    expect(removeJobFromQueue(queue, ' GERMANY ')).toEqual([queue[1]]);
+    expect(queue).toHaveLength(2);
   });
 
   it('removes job from queue by id or name', () => {

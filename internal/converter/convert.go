@@ -4,13 +4,13 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"zimap/internal/setup"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"zimap/internal/setup"
 )
 
 type MapConverter struct {
@@ -97,6 +97,19 @@ func IsSupportedInput(mapFilePath string) bool {
 }
 
 func RunWithContext(ctx context.Context, mapFilePath string, outputDir string, opts ConvertOptions) (string, error) {
+	// Validate the caller's input first: a bad map path must report the input
+	// problem, not a missing-tools error. Also keeps the validation testable
+	// on machines without Java/mkgmap installed.
+	if info, err := os.Stat(mapFilePath); err != nil || info.IsDir() {
+		return "", fmt.Errorf("invalid input map %s", mapFilePath)
+	}
+	if !IsSupportedInput(mapFilePath) {
+		return "", fmt.Errorf("unsupported input format %s; supported formats: .osm.pbf, .pbf, .osm, .osm.gz, .osm.bz2", filepath.Base(mapFilePath))
+	}
+	detailLevel, err := NormalizeDetailLevel(string(opts.DetailLevel))
+	if err != nil {
+		return "", err
+	}
 	javaPath, err := setup.JavaBinPath()
 	if err != nil {
 		return "", err
@@ -106,16 +119,6 @@ func RunWithContext(ctx context.Context, mapFilePath string, outputDir string, o
 		return "", err
 	}
 	splitterPath, err := setup.SplitterBinPath()
-	if err != nil {
-		return "", err
-	}
-	if info, err := os.Stat(mapFilePath); err != nil || info.IsDir() {
-		return "", fmt.Errorf("invalid input map %s", mapFilePath)
-	}
-	if !IsSupportedInput(mapFilePath) {
-		return "", fmt.Errorf("unsupported input format %s; supported formats: .osm.pbf, .pbf, .osm, .osm.gz, .osm.bz2", filepath.Base(mapFilePath))
-	}
-	detailLevel, err := NormalizeDetailLevel(string(opts.DetailLevel))
 	if err != nil {
 		return "", err
 	}

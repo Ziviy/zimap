@@ -61,6 +61,7 @@ func (a *App) ConvertURL(downloadURL string, name string, heapSize string, detai
 			runErr = styleErr
 			return styleErr
 		}
+		success = true
 		return nil
 	}
 
@@ -97,25 +98,7 @@ func (a *App) ConvertURL(downloadURL string, name string, heapSize string, detai
 		LogCallback: func(msg string) {
 			a.emitEvent("convert:log", msg)
 		},
-		ProgressCallback: func(downloaded int64, total int64, speedBps float64) {
-			var percent int = 0
-			if total > 0 {
-				percent = int((downloaded * 100) / total)
-			}
-			eta := 0
-			if speedBps > 0 && total > downloaded {
-				eta = int(float64(total-downloaded) / speedBps)
-			}
-			a.emitEvent("convert:progress", percent)
-			a.emitEvent("convert:progress_detail", ProgressDetail{
-				Downloaded: downloaded,
-				Total:      total,
-				Percent:    percent,
-				SpeedBps:   speedBps,
-				SpeedText:  formatSpeed(speedBps),
-				EtaSeconds: eta,
-			})
-		},
+		ProgressCallback: a.emitDownloadProgress,
 	}
 
 	err = client.DownloadWithOptions(ctx, downloadURL, pbfPath, opts)
@@ -149,6 +132,28 @@ func (a *App) ConvertURL(downloadURL string, name string, heapSize string, detai
 	return nil
 }
 
+// emitDownloadProgress streams download transfer metrics to the frontend (shared by
+// URL and BBBike precompiled downloads).
+func (a *App) emitDownloadProgress(downloaded int64, total int64, speedBps float64) {
+	percent := 0
+	if total > 0 {
+		percent = int((downloaded * 100) / total)
+	}
+	eta := 0
+	if speedBps > 0 && total > downloaded {
+		eta = int(float64(total-downloaded) / speedBps)
+	}
+	a.emitEvent("convert:progress", percent)
+	a.emitEvent("convert:progress_detail", ProgressDetail{
+		Downloaded: downloaded,
+		Total:      total,
+		Percent:    percent,
+		SpeedBps:   speedBps,
+		SpeedText:  formatSpeed(speedBps),
+		EtaSeconds: eta,
+	})
+}
+
 // downloadPrecompiledBBBike handles BBBike pre-compiled Garmin style archives
 // (garmin-onroad-latin1.zip, garmin-ontrail-latin1.zip, garmin-opentopo-latin1.zip,
 // garmin-osm.zip) by streaming the ZIP, extracting the gmapsupp.img inside
@@ -180,24 +185,7 @@ func (a *App) downloadPrecompiledBBBike(ctx context.Context, downloadURL, name, 
 		LogCallback: func(msg string) {
 			a.emitEvent("convert:log", msg)
 		},
-		ProgressCallback: func(downloaded int64, total int64, speedBps float64) {
-			var percent int
-			if total > 0 {
-				percent = int((downloaded * 100) / total)
-			}
-			eta := 0
-			if speedBps > 0 && total > downloaded {
-				eta = int(float64(total-downloaded) / speedBps)
-			}
-			a.emitEvent("convert:progress", percent)
-			a.emitEvent("convert:progress_detail", ProgressDetail{
-				Downloaded: downloaded,
-				Total:      total,
-				SpeedBps:   speedBps,
-				SpeedText:  formatSpeed(speedBps),
-				EtaSeconds: eta,
-			})
-		},
+		ProgressCallback: a.emitDownloadProgress,
 	}
 
 	a.emitEvent("convert:stage", "download")
@@ -257,8 +245,6 @@ func (a *App) downloadPrecompiledBBBike(ctx context.Context, downloadURL, name, 
 		a.emitEvent("convert:log", fmt.Sprintf("[WARN] Failed to save metadata: %v", metaErr))
 	}
 
-	a.emitEvent("convert:done")
-	_ = a.SendNotification("ZiMap Downloader", fmt.Sprintf("Карта %s успешно собрана!", name))
 	return nil
 }
 

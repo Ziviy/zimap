@@ -1,12 +1,16 @@
+function normalizeMapName(name) {
+  return (name || '').trim().replace(/\.img$/i, '').toLowerCase();
+}
+
 export function isMapQueued(name, queue) {
   if (!name || !Array.isArray(queue)) return false;
-  const clean = name.replace(/\.img$/i, '').toLowerCase();
-  return queue.some(item => item.name && item.name.replace(/\.img$/i, '').toLowerCase() === clean);
+  const clean = normalizeMapName(name);
+  return clean !== '' && queue.some(item => normalizeMapName(item.name) === clean);
 }
 
 export function createQueueItem(url, name, heapSize = '', detailLevel = 'standard') {
   return {
-    id: `${name}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+    id: `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     url,
     name,
     heapSize,
@@ -16,7 +20,7 @@ export function createQueueItem(url, name, heapSize = '', detailLevel = 'standar
 }
 
 export function enqueueJob(queue, item) {
-  if (isMapQueued(item.name, queue)) {
+  if (isMapQueued(item.name, queue) || (item.url && queue.some(queued => queued.url === item.url))) {
     return queue;
   }
   return [...queue, item];
@@ -28,7 +32,16 @@ export function dequeueJob(queue) {
   return { nextJob, remainingQueue };
 }
 
+export function scheduleNextJob(queue, startJob) {
+  const timer = setTimeout(() => {
+    const { nextJob, remainingQueue } = dequeueJob(queue);
+    startJob(nextJob, remainingQueue);
+  }, 100);
+  return () => clearTimeout(timer);
+}
+
 export function removeJobFromQueue(queue, jobId) {
   if (!Array.isArray(queue)) return [];
-  return queue.filter(item => item.id !== jobId && item.name !== jobId);
+  const clean = normalizeMapName(jobId);
+  return queue.filter(item => item.id !== jobId && item.url !== jobId && normalizeMapName(item.name) !== clean);
 }

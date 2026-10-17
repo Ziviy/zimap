@@ -110,9 +110,8 @@ func TestAppDeviceMethods(t *testing.T) {
 	if err := app.RevealDevicePath(filepath.Join(tmpDir, "nonexistent.file")); err == nil {
 		t.Errorf("expected error revealing nonexistent file, got nil")
 	}
-
-	// Test RevealDevicePath with existing directory
-	_ = app.RevealDevicePath(garminDir)
+	// NOTE: no RevealDevicePath call on an existing path here — it would
+	// actually launch Finder/Explorer/xdg-open and block the test.
 }
 
 func TestAppDeviceFreshnessAndSync(t *testing.T) {
@@ -297,5 +296,3 @@ func TestAppMTPDeviceOperations(t *testing.T) {
 		t.Errorf("expected error on RevealDevicePath for MTP path, got nil")
 	}
 }
-
-

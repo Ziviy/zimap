@@ -7,6 +7,7 @@ import * as WailsRuntime from '../wailsjs/runtime/runtime';
 import appIconUrl from './assets/appicon.png';
 
 import { formatBytes, openExternalURL } from './utils/formatters';
+import { createQueueItem, enqueueJob, scheduleNextJob, isMapQueued, removeJobFromQueue } from './utils/queue';
 
 import Sidebar from './components/navigation/Sidebar';
 import Toolbar from './components/navigation/Toolbar';
@@ -776,6 +777,7 @@ function App() {
     
     if (WailsApp.ConvertURL) {
       WailsApp.ConvertURL(url, name, heapSize, detail || detailLevel).catch(err => {
+        if (activeJobRef.current !== job) return;
         setLogs(prev => [...prev, `[ERROR] ${err}`]);
         setJobRunning(false);
         setActiveJob(null);
@@ -785,24 +787,14 @@ function App() {
 
   const handleStartBuild = (url, name, heapSize = '', detail = '') => {
     if (jobRunning) {
-      setDownloadQueue(prev => {
-        const exists = prev.some(item => 
-          item.url === url || item.name.toLowerCase() === name.toLowerCase()
-        );
-        if (exists) return prev;
-        return [...prev, { id: `${name}-${Date.now()}`, name, url, heapSize, detailLevel: detail || detailLevel }];
-      });
+      setDownloadQueue(prev => enqueueJob(prev, createQueueItem(url, name, heapSize, detail || detailLevel)));
       return;
     }
     executeBuild(url, name, heapSize, detail);
   };
 
   const handleRemoveFromQueue = (identifier) => {
-    setDownloadQueue(prev => prev.filter(item => 
-      item.id !== identifier && 
-      item.url !== identifier && 
-      item.name.toLowerCase() !== identifier.toLowerCase()
-    ));
+    setDownloadQueue(prev => removeJobFromQueue(prev, identifier));
   };
 
   const handleClearQueue = () => {
@@ -811,18 +803,16 @@ function App() {
 
   const isRegionQueued = (region) => {
     if (!region || !region.pbfUrl) return false;
-    const nameLower = region.name.trim().toLowerCase();
-    return downloadQueue.some(q => q.url === region.pbfUrl || q.name.trim().toLowerCase() === nameLower);
+    return downloadQueue.some(q => q.url === region.pbfUrl) || isMapQueued(region.name, downloadQueue);
   };
 
   // Auto-advance download queue (Task 35)
   useEffect(() => {
     if (!jobRunning && downloadQueue.length > 0) {
-      const nextJob = downloadQueue[0];
-      setDownloadQueue(prev => prev.slice(1));
-      setTimeout(() => {
+      return scheduleNextJob(downloadQueue, (nextJob, remainingQueue) => {
         executeBuild(nextJob.url, nextJob.name, nextJob.heapSize, nextJob.detailLevel);
-      }, 100);
+        setDownloadQueue(remainingQueue);
+      });
     }
   }, [jobRunning, downloadQueue]);
 
@@ -839,6 +829,7 @@ function App() {
 
     if (WailsApp.ConvertLocal) {
       WailsApp.ConvertLocal(filePath, name, heapVal, detail).catch(err => {
+        if (activeJobRef.current !== job) return;
         setLogs(prev => [...prev, `[ERROR] ${err}`]);
         setJobRunning(false);
         setActiveJob(null);
@@ -896,12 +887,6 @@ function App() {
   const handleNavigateConsole = () => {
     setCurrentView('console');
   };
-
-  useEffect(() => {
-    if (currentView === 'device') {
-      loadDevices();
-    }
-  }, [currentView]);
 
   return (
     <div className="app-shell">

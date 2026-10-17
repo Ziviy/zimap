@@ -2,6 +2,8 @@
 
 Welcome, AI Agent or human contributor! This document serves as the primary technical briefing for working with the **ZiMap Downloader** (formerly `zimap`) codebase. Read this document thoroughly before proposing or implementing changes.
 
+**Start with [the architecture and module guide](docs/ARCHITECTURE.md) for source orientation.** It maps tasks to files, explains module ownership and runtime workflows, and records IPC contracts, storage, testing prerequisites and implementation caveats. Use its task-to-file index instead of re-examining the entire project. Keep it updated when those boundaries change; use `TODO.md` for planned work rather than treating historical plans as implemented behavior.
+
 ---
 
 ## 1. Project Overview & Mission
@@ -23,7 +25,7 @@ Welcome, AI Agent or human contributor! This document serves as the primary tech
 ## 2. Technology Stack
 
 - **Desktop Framework**: [Wails v2](https://wails.io/) (`github.com/wailsapp/wails/v2 v2.15.0`)
-- **Backend Language**: Go 1.25
+- **Backend Language**: Go, as required by [`go.mod`](go.mod) (currently 1.26.5+)
 - **Frontend Stack**: React 19, Vite, Lucide React icons
 - **Styling**: Pure CSS with Apple HIG design system tokens (`AppleTheme.css`)
 - **OS Runtimes**: WebKit (macOS), Evergreen WebView2 (Windows)
@@ -36,10 +38,12 @@ Welcome, AI Agent or human contributor! This document serves as the primary tech
 ```
 zimap/
 ├── AGENTS.md                    # This developer & agent guide
-├── TODO.md                      # Active backlog (tasks 6-30) & Completed changelog (tasks 1-5)
+├── TODO.md                      # Active backlog & completed task history
+├── docs/ARCHITECTURE.md         # Current module map, workflows, IPC & agent handoff
 ├── app.go                       # Wails backend service struct (App) lifecycle & shared types
 ├── app_catalog.go               # Catalog fetching, caching, search & Russian aliases
 ├── app_convert.go               # Conversion pipeline (URL & local), BBBike direct downloads, cancel
+├── app_device.go                # Device discovery, protected map management, freshness & sync
 ├── app_outputs.go               # Output maps listing, deletion, Finder reveal, file export
 ├── app_tools.go                 # Adoptium JDK, mkgmap, splitter check & updates, system info
 ├── app_updater.go               # GitHub Releases updater & semver comparator
@@ -52,11 +56,12 @@ zimap/
 ├── go.mod / go.sum              # Go dependencies
 │
 ├── cache/                       # Local disk cache (geofabrik-index.json, TTL 24h)
-├── cmd/                         # CLI entry points (legacy)
+├── cmd/                         # CLI-only entry point & zimap-mtp USB sidecar
 ├── internal/
 │   ├── archive/                 # .zip, .tar, and .tar.gz extraction utilities & tests
 │   ├── cli/                     # CLI commands registry (download, convert, update) & tests
 │   ├── converter/               # Splitter & Mkgmap execution with progress and context cancel & tests
+│   ├── device/                  # Mounted/MTP devices, map protection, freshness & transfer engine
 │   ├── download/                # Streaming HTTP client with progress reader, retries, and proxy
 │   ├── geofabrik/               # Geofabrik index-v1.json client and region hierarchy model
 │   ├── provider/                # Multi-provider catalog (Geofabrik, OSM France, BBBike)
@@ -64,7 +69,7 @@ zimap/
 │
 ├── frontend/                    # Frontend React SPA
 │   ├── src/
-│   │   ├── App.jsx              # Main UI state orchestrator (~750 lines)
+│   │   ├── App.jsx              # UI state, queue, backend actions & Wails event orchestration
 │   │   ├── AppleTheme.css       # Apple HIG CSS system (vibrancy, tokens, typography, dark/light)
 │   │   ├── i18n.js              # Localization dictionaries (RU/EN)
 │   │   ├── i18n.test.js         # Vitest i18n key parity tests
@@ -73,7 +78,7 @@ zimap/
 │   │   │   ├── modals/          # DeleteConfirmationModal, UpdateModal, StorageCleanModal
 │   │   │   ├── navigation/      # Sidebar, Toolbar
 │   │   │   └── views/           # CatalogView, OutputsView, ConsoleView, LocalConvertView, ToolsView, SettingsView, AboutView
-│   │   └── utils/               # Pure helper utilities
+│   │   └── utils/               # Formatting, URL validation & queue scheduling helpers
 │   │       ├── formatters.js    # formatBytes, formatDate, formatSpeed, formatEta, isValidExternalURL
 │   │       ├── formatters.test.js
 │   │       ├── queue.js         # Job queue management utilities
@@ -152,15 +157,17 @@ When making changes to this codebase, you **must adhere** to the following princ
 
 ### Rule 1: Preserve CLI Backward Compatibility
 The binary must function both as a desktop GUI and as a headless CLI tool:
-- When invoked with CLI arguments (`download`, `convert`, `update`, `--help`), `main.go` **must dispatch directly** to `cli.ProcessCommand(os.Args[1:])`.
+- When invoked with CLI commands (`download`, `convert`, `update`), `main.go` **must dispatch directly** to `cli.ProcessCommand(os.Args[1:])`.
+- Help arguments (`--help`, `-h`, `help`) are handled directly in `main.go` without starting the GUI.
 - When invoked with zero arguments, it initializes and runs `wails.Run(...)`.
 - **Never** introduce GUI dependencies into `internal/converter` or `internal/cli` that prevent headless command-line execution.
 
 ### Rule 2: Non-Blocking IPC & Real-Time Event Streaming
 - Wails bindings in `app.go` (`ConvertURL`, `ConvertLocal`, `UpdateTools`) must **never block the main IPC thread** with long-running operations.
 - Long jobs must launch in background goroutines (`go func() { ... }()`).
+- **Current implementation caveat:** conversion and tool-update methods still perform their main work before returning, while update/device start methods launch background work. Read the architecture guide's execution-ownership notes before changing binding return semantics; this responsiveness rule describes the required design, not a guarantee that every current method already returns immediately.
 - Progress, stages, and logs must be streamed to the frontend via Wails events:
-  - `convert:stage` (`"download"` | `"split"` | `"compile"` | `"finalize"` | `"done"` | `"error"`)
+  - `convert:stage` (`"download"` | `"splitter"` | `"mkgmap"` | `"compile"` | `"finalize"` | `"error"`; the frontend sets `"done"` on `convert:done`)
   - `convert:progress` (integer percent 0-100)
   - `convert:log` (stdout/stderr lines)
   - `convert:done` (emitted **only** upon true successful completion)
