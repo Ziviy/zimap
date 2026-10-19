@@ -73,7 +73,7 @@ export const Sidebar = ({
       <div className="sidebar-footer-branding" title="ZiMap Downloader">
         <div className="sidebar-footer-title">ZiMap</div>
         <div className="sidebar-footer-subtitle">Map Downloader</div>
-        <div className="sidebar-footer-badge">{appVersion || '0.0.3 BETA'}</div>
+        <div className="sidebar-footer-badge">{appVersion || '0.0.3'}</div>
         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 8, display: 'flex', alignItems: 'center' }}>
           <span className="ready-indicator" style={{ backgroundColor: toolsReady ? 'var(--system-green)' : 'var(--system-red)' }}></span>
           {toolsReady ? t('common.ready') : t('common.needsSetup')}

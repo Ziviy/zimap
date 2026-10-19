@@ -298,8 +298,8 @@ func (a *App) CheckForUpdate() (*UpdateInfo, error) {
 func (a *App) SimulateUpdateCheck() (*UpdateInfo, error) {
 	return &UpdateInfo{
 		CurrentVersion: CurrentAppVersion,
-		Version:        "0.0.4 BETA",
-		ReleaseNotes:   "• Автоматическое обновление приложения прямо через интерфейс (In-App Update)\n• Реальное отображение скорости загрузки, размера и времени (ETA)\n• Перезапуск приложения в один клик после успешной установки\n• Обновленная версия 0.0.3 BETA\n• Исправления и улучшения дизайна Apple HIG",
+		Version:        "0.0.4",
+		ReleaseNotes:   "• Автоматическое обновление приложения прямо через интерфейс (In-App Update)\n• Реальное отображение скорости загрузки, размера и времени (ETA)\n• Перезапуск приложения в один клик после успешной установки\n• Обновленная версия 0.0.3\n• Исправления и улучшения дизайна Apple HIG",
 		DownloadURL:    "https://github.com/Ziviy/zimap/releases",
 		AssetURL:       "simulate",
 		AssetName:      fmt.Sprintf("ZiMap-%s-%s.zip", runtime.GOOS, runtime.GOARCH),
