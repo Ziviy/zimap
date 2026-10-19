@@ -239,7 +239,7 @@ Test ownership: `app_test.go` covers catalog/output/storage/proxy/updater/BBBike
 - [Makefile](../Makefile): `make build-mtp`, `make test`, `make build`, `make release-local`. Backend tests under `make test` build the helper first; the convenience packaging flow is macOS-oriented.
 - [scripts/build-mtp.sh](../scripts/build-mtp.sh): builds the helper for the target OS/architecture. On macOS it builds/links static libusb, writes `tools/mtp/zimap-mtp`, and copies it into an existing app bundle.
 - [.github/workflows/release.yml](../.github/workflows/release.yml): macOS arm64/amd64 and Windows amd64 builds, ZIP packaging, GitHub publishing. Windows packaging currently contains the main EXE; macOS packaging includes the MTP helper. This workflow builds releases; it does not replace running the unit/race suites.
-- Expected release assets: `ZiMap-darwin-arm64.zip`, `ZiMap-darwin-amd64.zip`, `ZiMap-windows-amd64.zip`. Preserve this naming contract with `app_updater.go`.
+- Expected release assets: `ZiMap-macos-arm64.zip`, `ZiMap-macos-amd64.zip`, `ZiMap-windows-amd64.zip`. Preserve this naming contract with `app_updater.go`.
 - Current version identity is split between `CurrentAppVersion` in `app.go` and product metadata in `wails.json`. Check both when changing release/version behavior.
 
 ## 9. Keep these boundaries intact

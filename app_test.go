@@ -708,11 +708,11 @@ func TestSemVerComparison(t *testing.T) {
 		{"v1.0.1-rc1", "v1.0.0", true},
 		{"v1.0.0", "v1.0.1", false},
 		{"v1.0.0", "v2.0.0", false},
-		{"v0.0.2", "0.0.1 BETA", true},
-		{"0.0.2", "0.0.1 BETA", true},
-		{"0.0.1 BETA", "0.0.1 BETA", false},
+		{"v0.0.2", "0.0.2 BETA", true},
+		{"0.0.2", "0.0.2 BETA", true},
+		{"0.0.2 BETA", "0.0.2 BETA", false},
 		{"v0.0.1", "0.0.1 BETA", true},
-		{"0.0.0", "0.0.1 BETA", false},
+		{"0.0.0", "0.0.2 BETA", false},
 	}
 
 	for _, tc := range testCases {
@@ -1245,15 +1245,15 @@ func TestCheckTools(t *testing.T) {
 func TestGetAppVersion(t *testing.T) {
 	app := NewApp()
 	ver := app.GetAppVersion()
-	if ver != "0.0.1 BETA" {
-		t.Errorf("GetAppVersion() = %q, want '0.0.1 BETA'", ver)
+	if ver != "0.0.2 BETA" {
+		t.Errorf("GetAppVersion() = %q, want '0.0.2 BETA'", ver)
 	}
 }
 
 func TestFindMatchingAsset(t *testing.T) {
 	assets := []GitHubAsset{
-		{Name: "ZiMap-darwin-arm64.zip", BrowserDownloadURL: "https://example.com/mac-arm64.zip", Size: 25000000},
-		{Name: "ZiMap-darwin-amd64.zip", BrowserDownloadURL: "https://example.com/mac-amd64.zip", Size: 25000000},
+		{Name: "ZiMap-macos-arm64.zip", BrowserDownloadURL: "https://example.com/mac-arm64.zip", Size: 25000000},
+		{Name: "ZiMap-macos-amd64.zip", BrowserDownloadURL: "https://example.com/mac-amd64.zip", Size: 25000000},
 		{Name: "ZiMap-windows-amd64.zip", BrowserDownloadURL: "https://example.com/win-amd64.zip", Size: 23000000},
 		{Name: "ZiMap-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux-amd64.tar.gz", Size: 22000000},
 		{Name: "checksums.txt", BrowserDownloadURL: "https://example.com/checksums.txt", Size: 100},
@@ -1261,13 +1261,13 @@ func TestFindMatchingAsset(t *testing.T) {
 
 	// 1. darwin / arm64
 	match := findMatchingAsset(assets, "darwin", "arm64")
-	if match == nil || match.Name != "ZiMap-darwin-arm64.zip" {
+	if match == nil || match.Name != "ZiMap-macos-arm64.zip" {
 		t.Errorf("expected darwin arm64 match, got: %#v", match)
 	}
 
 	// 2. darwin / amd64
 	match = findMatchingAsset(assets, "darwin", "amd64")
-	if match == nil || match.Name != "ZiMap-darwin-amd64.zip" {
+	if match == nil || match.Name != "ZiMap-macos-amd64.zip" {
 		t.Errorf("expected darwin amd64 match, got: %#v", match)
 	}
 
@@ -1296,12 +1296,94 @@ func TestSimulateUpdateLifecycle(t *testing.T) {
 	if !info.CanAutoUpdate {
 		t.Errorf("expected CanAutoUpdate to be true for simulated update")
 	}
-	if info.CurrentVersion != "0.0.1 BETA" {
-		t.Errorf("expected CurrentVersion '0.0.1 BETA', got %q", info.CurrentVersion)
+	if info.CurrentVersion != "0.0.2 BETA" {
+		t.Errorf("expected CurrentVersion '0.0.2 BETA', got %q", info.CurrentVersion)
 	}
 
 	// Test CancelUpdate when idle
 	if err := app.CancelUpdate(); err != nil {
 		t.Errorf("CancelUpdate when idle returned error: %v", err)
+	}
+}
+
+// Regression tests for missing output/ directory on fresh standalone installs:
+// os.MkdirTemp fails with "GetFileAttributesEx ... cannot find the file specified"
+// when the output directory does not exist yet (TODO #53).
+
+func TestConvertURLCreatesMissingOutputDirectory(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("GARMIN_MAP_HOME", tempHome)
+
+	app := NewApp() // ctx intentionally nil: emitEvent no-ops, WithCancel tolerated
+
+	outDir, err := setup.OutputDirectory()
+	if err != nil {
+		t.Fatalf("failed to get output directory: %v", err)
+	}
+	if _, err := os.Stat(outDir); !os.IsNotExist(err) {
+		t.Fatalf("precondition: output dir must not exist, got: %v", err)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "not found", http.StatusNotFound)
+	}))
+	defer ts.Close()
+
+	// Non-BBBike URL exercises the MkdirAll(outDir) path before MkdirTemp.
+	err = app.ConvertURL(ts.URL+"/test-region.osm.pbf", "test-region", "2G", "standard")
+	if err == nil {
+		t.Fatalf("expected ConvertURL to fail for 404 mock server")
+	}
+	if strings.Contains(err.Error(), "GetFileAttributesEx") || strings.Contains(err.Error(), "cannot find the file specified") {
+		t.Errorf("expected download error, got missing-directory error: %v", err)
+	}
+	if _, err := os.Stat(outDir); err != nil {
+		t.Errorf("expected ConvertURL to create output directory, got: %v", err)
+	}
+}
+
+func TestConvertLocalCreatesMissingOutputDirectory(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("GARMIN_MAP_HOME", tempHome)
+
+	app := createTestApp()
+
+	outDir, err := setup.OutputDirectory()
+	if err != nil {
+		t.Fatalf("failed to get output directory: %v", err)
+	}
+
+	// Valid input file so runConversion reaches the workdir creation stage.
+	pbfPath := filepath.Join(t.TempDir(), "region.osm.pbf")
+	if err := os.WriteFile(pbfPath, []byte("OSM PBF PLACEHOLDER"), 0644); err != nil {
+		t.Fatalf("failed to write placeholder pbf: %v", err)
+	}
+
+	// Expected to fail later (no splitter/mkgmap tools in a fresh home),
+	// but the output directory must exist by then.
+	if err := app.ConvertLocal(pbfPath, "region", "2G", "standard"); err == nil {
+		t.Fatalf("expected ConvertLocal to fail without tools installed")
+	}
+	if _, err := os.Stat(outDir); err != nil {
+		t.Errorf("expected ConvertLocal to create output directory, got: %v", err)
+	}
+}
+
+func TestSaveCompanionMetadataCreatesMissingOutputDirectory(t *testing.T) {
+	tempHome := t.TempDir()
+	t.Setenv("GARMIN_MAP_HOME", tempHome)
+
+	app := createTestApp()
+
+	outDir, err := setup.OutputDirectory()
+	if err != nil {
+		t.Fatalf("failed to get output directory: %v", err)
+	}
+
+	if err := app.saveCompanionMetadata("fresh-map", "local", "/tmp/custom.osm.pbf", "2G", ""); err != nil {
+		t.Fatalf("saveCompanionMetadata failed without output dir: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "fresh-map.meta.json")); err != nil {
+		t.Errorf("expected metadata file to be created: %v", err)
 	}
 }

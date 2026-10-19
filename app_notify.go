@@ -15,6 +15,12 @@ import (
 func (a *App) SendNotification(title, message string) error {
 	switch runtime.GOOS {
 	case "darwin":
+		// Native delivery is attributed to the app bundle (com.ziviy.zimap), so the
+		// banner shows the ZiMap icon instead of the Script Editor paper icon (TODO #39).
+		if notifyDarwin(title, message) {
+			return nil
+		}
+		// Fallback for dev runs / tests outside a .app bundle.
 		script := fmt.Sprintf("display notification %q with title %q sound name \"default\"", message, title)
 		cmd := exec.Command("osascript", "-e", script)
 		return cmd.Run()

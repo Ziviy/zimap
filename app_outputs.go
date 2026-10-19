@@ -108,6 +108,9 @@ func (a *App) saveCompanionMetadata(name, sourceType, sourceURL, heapSize string
 	if err != nil {
 		return err
 	}
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return err
+	}
 
 	cleanName := strings.TrimSuffix(name, filepath.Ext(name))
 	metaFile := filepath.Join(outDir, cleanName+".meta.json")

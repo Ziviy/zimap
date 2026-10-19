@@ -59,7 +59,7 @@ export const UpdateModal = ({
 
           <div className="update-badge-row">
             <span className="version-pill">
-              {t('update.currentVersion')}: {updateInfo.currentVersion || appVersion || '0.0.1 BETA'}
+              {t('update.currentVersion')}: {updateInfo.currentVersion || appVersion || '0.0.2 BETA'}
             </span>
             <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>→</span>
             <span className="version-pill new">

@@ -3,25 +3,13 @@
 This document tracks planned improvements, bug fixes, and feature additions for the **ZiMap Downloader** application. 
 
 **Progress Tracker**:
-- **Total Tasks**: 52
-- **Completed**: 49 (`#1`, `#2`, `#3`, `#4`, `#5`, `#6`, `#7`, `#8`, `#9`, `#10`, `#11`, `#12`, `#13`, `#14`, `#15`, `#16`, `#17`, `#18`, `#19`, `#20`, `#21`, `#22`, `#23`, `#24`, `#25`, `#26`, `#27`, `#28`, `#29`, `#30`, `#31`, `#32`, `#33`, `#34`, `#35`, `#36`, `#37`, `#38`, `#40`, `#41`, `#42`, `#43`, `#45`, `#47`, `#48`, `#49`, `#50`, `#51`, `#52`)
-- **Active / Pending**: 3 (`#39`, `#44`, `#46`)
+- **Total Tasks**: 53
+- **Completed**: 51 (`#1`, `#2`, `#3`, `#4`, `#5`, `#6`, `#7`, `#8`, `#9`, `#10`, `#11`, `#12`, `#13`, `#14`, `#15`, `#16`, `#17`, `#18`, `#19`, `#20`, `#21`, `#22`, `#23`, `#24`, `#25`, `#26`, `#27`, `#28`, `#29`, `#30`, `#31`, `#32`, `#33`, `#34`, `#35`, `#36`, `#37`, `#38`, `#39`, `#40`, `#41`, `#42`, `#43`, `#45`, `#47`, `#48`, `#49`, `#50`, `#51`, `#52`, `#53`)
+- **Active / Pending**: 2 (`#44`, `#46`)
 
 ---
 
 ## 🎯 Active Backlog (Pending Tasks)
-
-### 39. Application Icon in System Notifications
-- **Issue**: macOS notification banners currently display the generic Script Editor / AppleScript paper icon instead of the ZiMap app icon.
-- **Cause**: Invoking notifications via `osascript` causes macOS to attribute the notification to `/usr/bin/osascript`.
-- **Solution**:
-  - Pass the application bundle identifier `com.ziviy.zimap` or use macOS JXA / notification helper with proper bundle icon association.
-  - Alternatively, pass the icon path directly to Web Notifications or native notification dispatcher.
-- **Affected Files**:
-  - `app.go`
-  - `frontend/src/App.jsx`
-
----
 
 ### 44. Multiple Output Map Format Selector
 - **User Requirement**: Add selection of output map file formats (assess feasibility and complexity).
@@ -66,7 +54,29 @@ This document tracks planned improvements, bug fixes, and feature additions for 
 
 ---
 
+### 39. Application Icon in System Notifications [COMPLETED]
+- **Issue**: macOS notification banners displayed the generic Script Editor paper icon because notifications were sent via `osascript` (attributed to `/usr/bin/osascript`).
+- **Resolution**:
+  - Added `app_notify_darwin.go` with an Objective-C bridge (cgo): `NSUserNotification` delivered via `NSUserNotificationCenter` is attributed to the running app bundle (`com.ziviy.zimap`), so banners show the authentic ZiMap icon.
+  - `SendNotification` on macOS now tries the native path first and falls back to `osascript` when not running from a `.app` bundle (dev runs, tests).
+  - Release assets renamed from `ZiMap-darwin-*.zip` to `ZiMap-macos-*.zip` (CI workflow, `Makefile`, `scoreAsset` already accepted `macos`, tests, docs) to avoid Go-OS naming confusion; updater keeps legacy `darwin` asset compatibility.
+  - Application version bumped to `0.0.2 BETA` across `app.go`, `wails.json`, and frontend fallbacks.
+- **Files Modified**: `app_notify_darwin.go` (new), `app_notify.go`, `.github/workflows/release.yml`, `Makefile`, `app.go`, `wails.json`, `frontend/src/App.jsx`, `frontend/src/components/modals/UpdateModal.jsx`, `frontend/src/components/navigation/Sidebar.jsx`, `frontend/src/components/views/AboutView.jsx`, `frontend/src/components/views/SettingsView.jsx`, `app_test.go`, `TODO.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`.
+
+---
+
 ## ✅ Completed Tasks & Changelog
+
+### 53. Fix Missing `output/` Directory Creation Before `os.MkdirTemp` on Fresh Standalone Installs [COMPLETED]
+- **Issue**: On a fresh standalone install, downloading any map or running a local PBF conversion failed immediately with `GetFileAttributesEx ...: The system cannot find the file specified` because `os.MkdirTemp` was called with a non-existent `output/` directory.
+- **Resolution**:
+  - `ConvertURL` (`app_convert.go`) and `runConversion` (shared with `ConvertLocal`) now call `os.MkdirAll(outDir, 0755)` immediately after `setup.OutputDirectory()` and before `os.MkdirTemp`, emitting `convert:error` / `convert:stage: "error"` on failure.
+  - `saveCompanionMetadata` (`app_outputs.go`) also calls `os.MkdirAll(outDir, 0755)` before writing `<name>.meta.json`.
+  - `ConvertURL` / `ConvertLocal` now tolerate a nil window context (headless/test runs) instead of panicking in `context.WithCancel`; events remain no-ops without a context.
+  - Added regression tests `TestConvertURLCreatesMissingOutputDirectory`, `TestConvertLocalCreatesMissingOutputDirectory`, and `TestSaveCompanionMetadataCreatesMissingOutputDirectory` in `app_test.go`, verifying conversions create `<ZIMAP_HOME>/output` on fresh installs and never surface the underlying `GetFileAttributesEx` error.
+- **Files Modified**: `app_convert.go`, `app_outputs.go`, `app_test.go`, `TODO.md`, `AGENTS.md`.
+
+---
 
 ### 52. Automated CI/CD Release Pipeline via GitHub Actions & In-App Auto-Update Integration [COMPLETED]
 - **Implementation Plan**: 📄 [Подробный архитектурный план реализации (docs/plans/task-52-github-actions-release.md)](docs/plans/task-52-github-actions-release.md)
@@ -81,7 +91,7 @@ This document tracks planned improvements, bug fixes, and feature additions for 
     - Zero external runtime dylib dependencies on end-user machines: statically links `libusb-1.0.a` with macOS system frameworks (`IOKit`, `CoreFoundation`, `Security`, `libobjc`).
     - Embeds `zimap-mtp` binary directly into `Contents/MacOS/` inside the macOS application bundle.
   - **Asset Naming & Updater Parity**:
-    - Exact matching with `scoreAsset` in `app_updater.go`: produces `ZiMap-darwin-arm64.zip`, `ZiMap-darwin-amd64.zip`, and `ZiMap-windows-amd64.zip`.
+    - Exact matching with `scoreAsset` in `app_updater.go`: produces `ZiMap-macos-arm64.zip`, `ZiMap-macos-amd64.zip`, and `ZiMap-windows-amd64.zip`.
     - Preserves macOS permissions and bundle attributes using `/usr/bin/ditto -c -k --keepParent`.
   - **Release Publishing**:
     - Aggregates all matrix artifacts via `actions/download-artifact@v4`.

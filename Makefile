@@ -43,7 +43,7 @@ release-local: build
 		exit 1; \
 	fi; \
 	ARCH=$$(go env GOARCH); \
-	OUT_ZIP="ZiMap-darwin-$${ARCH}.zip"; \
+	OUT_ZIP="ZiMap-macos-$${ARCH}.zip"; \
 	ditto -c -k --keepParent "$$APP_PATH" "$$OUT_ZIP"; \
 	echo "==> Successfully packaged $$OUT_ZIP"
 

@@ -34,7 +34,11 @@ func (a *App) ConvertURL(downloadURL string, name string, heapSize string, detai
 		a.jobMutex.Unlock()
 		return fmt.Errorf("a job is already running")
 	}
-	ctx, cancel := context.WithCancel(a.ctx)
+	baseCtx := a.ctx
+	if baseCtx == nil {
+		baseCtx = context.Background() // headless/tests: WithCancel panics on nil ctx
+	}
+	ctx, cancel := context.WithCancel(baseCtx)
 	a.cancelJob = cancel
 	a.jobMutex.Unlock()
 
@@ -70,6 +74,13 @@ func (a *App) ConvertURL(downloadURL string, name string, heapSize string, detai
 	// Create temp file for download
 	outDir, err := setup.OutputDirectory()
 	if err != nil {
+		runErr = err
+		a.emitEvent("convert:error", err.Error())
+		a.emitEvent("convert:stage", "error")
+		return err
+	}
+	// output/ may not exist on fresh standalone installs; os.MkdirTemp requires it
+	if err := os.MkdirAll(outDir, 0755); err != nil {
 		runErr = err
 		a.emitEvent("convert:error", err.Error())
 		a.emitEvent("convert:stage", "error")
@@ -254,7 +265,11 @@ func (a *App) ConvertLocal(filePath string, name string, heapSize string, detail
 		a.jobMutex.Unlock()
 		return fmt.Errorf("a job is already running")
 	}
-	ctx, cancel := context.WithCancel(a.ctx)
+	baseCtx := a.ctx
+	if baseCtx == nil {
+		baseCtx = context.Background() // headless/tests: WithCancel panics on nil ctx
+	}
+	ctx, cancel := context.WithCancel(baseCtx)
 	a.cancelJob = cancel
 	a.jobMutex.Unlock()
 
@@ -295,6 +310,11 @@ func (a *App) runConversion(ctx context.Context, pbfPath string, name string, he
 
 	outDir, err := setup.OutputDirectory()
 	if err != nil {
+		a.emitEvent("convert:error", err.Error())
+		return err
+	}
+	// output/ may not exist on fresh standalone installs; os.MkdirTemp requires it
+	if err := os.MkdirAll(outDir, 0755); err != nil {
 		a.emitEvent("convert:error", err.Error())
 		return err
 	}
