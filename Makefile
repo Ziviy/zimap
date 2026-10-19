@@ -30,6 +30,10 @@ build: build-mtp
 		if [ -d "$$app/Contents/MacOS" ]; then \
 			echo "==> Embedding zimap-mtp into $$app/Contents/MacOS/..."; \
 			cp tools/mtp/zimap-mtp "$$app/Contents/MacOS/zimap-mtp"; \
+			chmod +x "$$app/Contents/MacOS/zimap-mtp"; \
+			if command -v codesign >/dev/null 2>&1; then \
+				codesign --force --deep --sign - "$$app"; \
+			fi; \
 		fi \
 	done
 

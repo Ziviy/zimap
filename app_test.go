@@ -708,6 +708,8 @@ func TestSemVerComparison(t *testing.T) {
 		{"v1.0.1-rc1", "v1.0.0", true},
 		{"v1.0.0", "v1.0.1", false},
 		{"v1.0.0", "v2.0.0", false},
+		{"v0.0.3", "0.0.2 BETA", true},
+		{"0.0.3", "0.0.2 BETA", true},
 		{"v0.0.2", "0.0.2 BETA", true},
 		{"0.0.2", "0.0.2 BETA", true},
 		{"0.0.2 BETA", "0.0.2 BETA", false},

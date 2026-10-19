@@ -67,7 +67,7 @@ All root `app*.go` files belong to **one `package main` and one `App` service**,
 | [app_updater.go](../app_updater.go) | Release DTOs, version comparison, platform/architecture asset matching, `CheckForUpdate`, asynchronous `InstallUpdate`, cancellation, simulation, extraction, replacement and restart. Also contains directory-copy helpers and backend byte/ETA formatting. |
 | [app_storage.go](../app_storage.go) | `GetStorageMetrics`, `ClearTempAndCacheFiles`: account for maps/cache/workspaces and remove recognized temporary/cache entries. Preserves proxy configuration and map files; blocks temporary cleanup while a conversion slot is occupied. |
 | [app_proxy.go](../app_proxy.go) | `GetProxy`/`SetProxy`: validate HTTP/HTTPS/SOCKS5 proxy URLs, persist JSON, update the shared downloader configuration. |
-| [app_notify.go](../app_notify.go) | Native notifications via AppleScript, PowerShell or `notify-send`. OS command execution is separate from browser notifications in the frontend. |
+| [app_notify.go](../app_notify.go), `app_notify_darwin.go`, `app_notify_other.go` | Native notifications via `UNUserNotificationCenter` (macOS `.app` bundle, cgo) with AppleScript fallback, PowerShell (Windows), or `notify-send` (Linux). OS delivery is separate from browser notifications in the frontend. |
 
 ### State and execution ownership
 

@@ -57,11 +57,14 @@ fi
 chmod +x tools/mtp/zimap-mtp
 echo "==> Built tools/mtp/zimap-mtp successfully for ${TARGET_OS}/${TARGET_ARCH}."
 
-# If app bundle exists, copy sidecar helper into it
+# If app bundle exists, copy sidecar helper into it and re-sign bundle
 for app in build/bin/ZiMap.app build/bin/zimap.app; do
     if [ -d "$app/Contents/MacOS" ]; then
         echo "==> Embedding zimap-mtp into $app/Contents/MacOS/..."
         cp tools/mtp/zimap-mtp "$app/Contents/MacOS/zimap-mtp"
         chmod +x "$app/Contents/MacOS/zimap-mtp"
+        if [ "$TARGET_OS" = "darwin" ] && command -v codesign >/dev/null 2>&1; then
+            codesign --force --deep --sign - "$app"
+        fi
     fi
 done

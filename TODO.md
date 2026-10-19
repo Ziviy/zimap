@@ -4,27 +4,12 @@ This document tracks planned improvements, bug fixes, and feature additions for 
 
 **Progress Tracker**:
 - **Total Tasks**: 53
-- **Completed**: 50 (`#1`, `#2`, `#3`, `#4`, `#5`, `#6`, `#7`, `#8`, `#9`, `#10`, `#11`, `#12`, `#13`, `#14`, `#15`, `#16`, `#17`, `#18`, `#19`, `#20`, `#21`, `#22`, `#23`, `#24`, `#25`, `#26`, `#27`, `#28`, `#29`, `#30`, `#31`, `#32`, `#33`, `#34`, `#35`, `#36`, `#37`, `#38`, `#40`, `#41`, `#42`, `#43`, `#45`, `#47`, `#48`, `#49`, `#50`, `#51`, `#52`, `#53`)
-- **Active / Pending**: 3 (`#39`, `#44`, `#46`)
+- **Completed**: 51 (`#1`, `#2`, `#3`, `#4`, `#5`, `#6`, `#7`, `#8`, `#9`, `#10`, `#11`, `#12`, `#13`, `#14`, `#15`, `#16`, `#17`, `#18`, `#19`, `#20`, `#21`, `#22`, `#23`, `#24`, `#25`, `#26`, `#27`, `#28`, `#29`, `#30`, `#31`, `#32`, `#33`, `#34`, `#35`, `#36`, `#37`, `#38`, `#39`, `#40`, `#41`, `#42`, `#43`, `#45`, `#47`, `#48`, `#49`, `#50`, `#51`, `#52`, `#53`)
+- **Active / Pending**: 2 (`#44`, `#46`)
 
 ---
 
 ## 🎯 Active Backlog (Pending Tasks)
-
-### 39. Application Icon in System Notifications [REWORK NEEDED]
-- **Issue**: macOS notification banners still display the wrong (generic) icon instead of the ZiMap app icon.
-- **Attempted (v0.0.2, insufficient)**:
-  - Native `NSUserNotification` delivery via an Objective-C bridge (`app_notify_darwin.go`, cgo) attributed to the `com.ziviy.zimap` bundle with `osascript` fallback — the banner icon is still not the ZiMap app icon in practice.
-- **Next Steps (candidate approaches)**:
-  - Migrate to the modern `UNUserNotificationCenter` API (requires bundle + authorization request) from the running app instead of the deprecated `NSUserNotification` legacy path.
-  - Or bundle a tiny notification helper (e.g. Swift CLI compiled into `Contents/MacOS/`) that posts `UNUserNotification` attributed to `ZiMap.app`.
-  - Or bundle `terminal-notifier` configured with the app bundle identifier.
-  - Verify visually from a real built `ZiMap.app` (not dev runs — dev runs intentionally fall back to `osascript`).
-- **Affected Files**:
-  - `app_notify_darwin.go`
-  - `app_notify.go`
-
----
 
 ### 44. Multiple Output Map Format Selector
 - **User Requirement**: Add selection of output map file formats (assess feasibility and complexity).
@@ -69,19 +54,29 @@ This document tracks planned improvements, bug fixes, and feature additions for 
 
 ---
 
+## ✅ Completed Tasks & Changelog
+
+### 39. Application Icon in System Notifications [COMPLETED]
+- **Issue**: macOS notification banners displayed the wrong (generic) icon instead of the ZiMap app icon; the initial `NSUserNotification` cgo attempt did not fix it in practice.
+- **Resolution**:
+  - `app_notify_darwin.go` migrated from the deprecated `NSUserNotification` API to the modern `UNUserNotificationCenter` (macOS 10.14+, cgo with `-fobjc-arc`, `-framework UserNotifications`). `UNUserNotificationCenter` reliably renders the posting bundle's icon (`com.ziviy.zimap`) in banners.
+  - Added a `UNUserNotificationCenterDelegate` (initialized once via `dispatch_once`) whose `willPresentNotification` returns list + banner + sound, so notifications appear even when the app is frontmost (macOS suppresses foreground notifications without a delegate).
+  - Authorization is requested fire-and-forget (`requestAuthorizationWithOptions` with the request enqueued from the completion handler), so the first-run permission prompt never blocks the caller; `@try`/`@catch` guards around `currentNotificationCenter` and a bundle-identifier check keep dev runs and tests on the `osascript` fallback in `app_notify.go`.
+  - Added `app_notify_other.go` (`//go:build !darwin`) stub for `notifyDarwin` so Windows and Linux builds compile cleanly.
+- **Files Modified**: `app_notify_darwin.go`, `app_notify_other.go`, `app_notify.go`, `TODO.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`.
+
+---
+
 ### Release Asset Renaming (darwin → macos) & Version Bump to `0.0.2 BETA` [COMPLETED]
 - **Issue**: `ZiMap-darwin-*.zip` release asset naming was confusing — `darwin` is the Go OS identifier, not what users know as macOS.
 - **Resolution**:
   - Release assets renamed to `ZiMap-macos-arm64.zip` / `ZiMap-macos-amd64.zip` across `.github/workflows/release.yml`, `Makefile`, `app_test.go`, and docs (`TODO.md`, `docs/ARCHITECTURE.md`); Wails `-platform darwin/...` toolchain flags unchanged.
   - `scoreAsset` in `app_updater.go` already accepted `macos` names, so the in-app updater remains compatible with both new `macos` and legacy `darwin` assets (covered by `TestFindMatchingAsset`).
-  - Hardened the release workflow: scoped `permissions` (`contents: read` globally, `contents: write` only on the publish job), `env:` indirection instead of `${{}}` template expansion in shell steps, and `persist-credentials: false` on the publish checkout.
+  - Hardened the release workflow: scoped `permissions` (`contents: read` globally, `contents: write` only on the publish job), `env:` indirection instead of `${{}}` template expansion in shell steps, `persist-credentials: false` on the publish checkout, support for both `v*` and numeric semver tags, and single-line PowerShell `Compress-Archive` syntax.
   - Application version bumped to `0.0.2 BETA` across `app.go` (`CurrentAppVersion`), `wails.json` (`0.0.2-beta`), and frontend fallbacks (`App.jsx`, `Sidebar.jsx`, `UpdateModal.jsx`, `AboutView.jsx`, `SettingsView.jsx`).
-  - Note: the macOS notification icon rework is tracked separately as Task #39 [REWORK NEEDED] — the native `NSUserNotification` attempt did not fully fix the banner icon.
-- **Files Modified**: `.github/workflows/release.yml`, `Makefile`, `app.go`, `wails.json`, `frontend/src/App.jsx`, `frontend/src/components/modals/UpdateModal.jsx`, `frontend/src/components/navigation/Sidebar.jsx`, `frontend/src/components/views/AboutView.jsx`, `frontend/src/components/views/SettingsView.jsx`, `app_test.go`, `app_notify_darwin.go` (new), `app_notify.go`, `TODO.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`.
+- **Files Modified**: `.github/workflows/release.yml`, `Makefile`, `app.go`, `wails.json`, `frontend/src/App.jsx`, `frontend/src/components/modals/UpdateModal.jsx`, `frontend/src/components/navigation/Sidebar.jsx`, `frontend/src/components/views/AboutView.jsx`, `frontend/src/components/views/SettingsView.jsx`, `app_test.go`, `TODO.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`.
 
 ---
-
-## ✅ Completed Tasks & Changelog
 
 ### 53. Fix Missing `output/` Directory Creation Before `os.MkdirTemp` on Fresh Standalone Installs [COMPLETED]
 - **Issue**: On a fresh standalone install, downloading any map or running a local PBF conversion failed immediately with `GetFileAttributesEx ...: The system cannot find the file specified` because `os.MkdirTemp` was called with a non-existent `output/` directory.
