@@ -1247,8 +1247,8 @@ func TestCheckTools(t *testing.T) {
 func TestGetAppVersion(t *testing.T) {
 	app := NewApp()
 	ver := app.GetAppVersion()
-	if ver != "0.0.2 BETA" {
-		t.Errorf("GetAppVersion() = %q, want '0.0.2 BETA'", ver)
+	if ver != "0.0.3 BETA" {
+		t.Errorf("GetAppVersion() = %q, want '0.0.3 BETA'", ver)
 	}
 }
 
@@ -1298,8 +1298,8 @@ func TestSimulateUpdateLifecycle(t *testing.T) {
 	if !info.CanAutoUpdate {
 		t.Errorf("expected CanAutoUpdate to be true for simulated update")
 	}
-	if info.CurrentVersion != "0.0.2 BETA" {
-		t.Errorf("expected CurrentVersion '0.0.2 BETA', got %q", info.CurrentVersion)
+	if info.CurrentVersion != "0.0.3 BETA" {
+		t.Errorf("expected CurrentVersion '0.0.3 BETA', got %q", info.CurrentVersion)
 	}
 
 	// Test CancelUpdate when idle

@@ -11,7 +11,7 @@
 ## 1. Контекст, цели и пользовательские сценарии
 
 ### 1.1. Контекст
-В приложении **ZiMap Downloader** уже реализован полнофункциональный механизм самообновления ([`app_updater.go`](file:///Users/kirill/Documents/Mine/garmin-map/app_updater.go)), включающий:
+В приложении **ZiMap Downloader** уже реализован полнофункциональный механизм самообновления ([`app_updater.go`](../../app_updater.go)), включающий:
 * Проверку новых версий через GitHub REST API (`/repos/Ziviy/zimap/releases/latest`);
 * Семантическое сравнение версий (`isVersionNewer`, `parseSemVer`);
 * Интеллектуальный скоринг и выбор подходящего бинарного ассета (`scoreAsset`);
@@ -36,7 +36,7 @@
 
 ### 2.1. Требования GitHub API и видимость репозитория
 * **Публичность репозитория**:  
-  Клиентский код в [`app_updater.go`](file:///Users/kirill/Documents/Mine/garmin-map/app_updater.go#L224-L241) выполняет неавторизованный GET-запрос к `https://api.github.com/repos/Ziviy/zimap/releases/latest`. Если репозиторий является приватным (Private), GitHub возвращает код `404 Not Found`. Для работы клиентского автообновления репозиторий должен быть **Public**.
+  Клиентский код в [`app_updater.go`](../../app_updater.go#L224-L241) выполняет неавторизованный GET-запрос к `https://api.github.com/repos/Ziviy/zimap/releases/latest`. Если репозиторий является приватным (Private), GitHub возвращает код `404 Not Found`. Для работы клиентского автообновления репозиторий должен быть **Public**.
 * **Статус релиза (Draft / Pre-release)**:  
   Эндпоинт `/releases/latest` в GitHub REST API возвращает **только** опубликованные, стабильные релизы. Если релиз помечен как «Draft» или «Pre-release», API вернет `404`. Пайплайн обязан публиковать релизы с флагами `draft: false` и `prerelease: false`.
 

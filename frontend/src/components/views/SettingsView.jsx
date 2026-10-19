@@ -326,7 +326,7 @@ export const SettingsView = ({
           <div className="settings-row">
             <div className="settings-label">
               <span className="settings-label-title">{t('settings.aboutInfo')}</span>
-              <span className="settings-label-subtitle">ZiMap Downloader {appVersion || '0.0.2 BETA'} • by Ziviy</span>
+              <span className="settings-label-subtitle">ZiMap Downloader {appVersion || '0.0.3 BETA'} • by Ziviy</span>
             </div>
             <div className="settings-value" style={{ display: 'flex', gap: 8 }}>
               {onSimulateUpdate && (

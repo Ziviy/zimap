@@ -263,7 +263,8 @@ func (a *App) CheckForUpdate() (*UpdateInfo, error) {
 		return nil, fmt.Errorf("failed to parse release information: %w", err)
 	}
 
-	isNewer := isVersionNewer(rel.TagName, CurrentAppVersion)
+	currentForCompare := strings.TrimSpace(strings.TrimSuffix(CurrentAppVersion, "BETA"))
+	isNewer := isVersionNewer(rel.TagName, currentForCompare)
 	downloadURL := rel.HTMLURL
 	if downloadURL == "" {
 		downloadURL = "https://github.com/Ziviy/zimap/releases"
@@ -297,8 +298,8 @@ func (a *App) CheckForUpdate() (*UpdateInfo, error) {
 func (a *App) SimulateUpdateCheck() (*UpdateInfo, error) {
 	return &UpdateInfo{
 		CurrentVersion: CurrentAppVersion,
-		Version:        "0.0.3 BETA",
-		ReleaseNotes:   "• Автоматическое обновление приложения прямо через интерфейс (In-App Update)\n• Реальное отображение скорости загрузки, размера и времени (ETA)\n• Перезапуск приложения в один клик после успешной установки\n• Обновленная версия 0.0.1 BETA\n• Исправления и улучшения дизайна Apple HIG",
+		Version:        "0.0.4 BETA",
+		ReleaseNotes:   "• Автоматическое обновление приложения прямо через интерфейс (In-App Update)\n• Реальное отображение скорости загрузки, размера и времени (ETA)\n• Перезапуск приложения в один клик после успешной установки\n• Обновленная версия 0.0.3 BETA\n• Исправления и улучшения дизайна Apple HIG",
 		DownloadURL:    "https://github.com/Ziviy/zimap/releases",
 		AssetURL:       "simulate",
 		AssetName:      fmt.Sprintf("ZiMap-%s-%s.zip", runtime.GOOS, runtime.GOARCH),
@@ -505,7 +506,8 @@ func (a *App) runRealUpdate(ctx context.Context, assetURL string) error {
 			return fmt.Errorf("failed to install new app bundle: %w", err)
 		}
 		_ = os.RemoveAll(backupTarget)
-		_ = exec.Command("xattr", "-rd", "com.apple.quarantine", installTarget).Run()
+		_ = exec.Command("xattr", "-cr", installTarget).Run()
+		_ = exec.Command("codesign", "--force", "--deep", "--sign", "-", installTarget).Run()
 	} else {
 		// Standalone executable
 		sourceExec := foundExecutable

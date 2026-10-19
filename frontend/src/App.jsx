@@ -102,7 +102,7 @@ function App() {
   };
 
   // Self-update state (Task 17 & In-App Updater)
-  const [appVersion, setAppVersion] = useState('0.0.2 BETA');
+  const [appVersion, setAppVersion] = useState('0.0.3 BETA');
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
@@ -133,7 +133,7 @@ function App() {
         setUpdateStatus({ stage: 'idle', progress: 0, metrics: null, error: null });
         setUpdateModalOpen(true);
       } else {
-        const ver = info?.currentVersion || appVersion || '0.0.2 BETA';
+        const ver = info?.currentVersion || appVersion || '0.0.3 BETA';
         showToast(`${t('update.upToDate')} (${ver})`, 'success');
       }
     } catch (err) {

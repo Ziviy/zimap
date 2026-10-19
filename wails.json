@@ -13,7 +13,7 @@
   "info": {
     "companyName": "Ziviy",
     "productName": "ZiMap Downloader",
-    "productVersion": "0.0.2-beta",
+    "productVersion": "0.0.3-beta",
     "copyright": "Copyright 2026 Ziviy",
     "comments": "ZiMap Downloader - OpenStreetMap to .img format compiler for GPS navigators and outdoor devices"
   }
