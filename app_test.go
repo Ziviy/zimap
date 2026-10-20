@@ -633,6 +633,7 @@ func TestProvidersAndProxy(t *testing.T) {
 
 	// 4. Test SetProxy and GetProxy
 	tmpDir := t.TempDir()
+	t.Setenv("ZIMAP_HOME", tmpDir)
 	origWd, _ := os.Getwd()
 	os.Chdir(tmpDir)
 	defer os.Chdir(origWd)
@@ -868,6 +869,67 @@ func TestStorageMetricsAndClean(t *testing.T) {
 	}
 }
 
+func TestCleanStorageExtendedOptions(t *testing.T) {
+	tmpRoot := filepath.Join(t.TempDir(), "ZiMap")
+	t.Setenv("ZIMAP_HOME", tmpRoot)
+
+	cacheDir := filepath.Join(tmpRoot, "cache")
+	outputDir := filepath.Join(tmpRoot, "output")
+	toolsDir := filepath.Join(tmpRoot, "tools")
+
+	_ = os.MkdirAll(cacheDir, 0755)
+	_ = os.MkdirAll(outputDir, 0755)
+	_ = os.MkdirAll(filepath.Join(toolsDir, "jdk"), 0755)
+	_ = os.MkdirAll(filepath.Join(toolsDir, "mkgmap"), 0755)
+	_ = os.MkdirAll(filepath.Join(toolsDir, "splitter"), 0755)
+
+	_ = os.WriteFile(filepath.Join(cacheDir, "geofabrik-index.json"), make([]byte, 120), 0644)
+	_ = os.WriteFile(filepath.Join(cacheDir, "proxy-config.json"), make([]byte, 40), 0644)
+	_ = os.WriteFile(filepath.Join(outputDir, "alps.img"), make([]byte, 300), 0644)
+	_ = os.WriteFile(filepath.Join(outputDir, "alps.meta.json"), make([]byte, 50), 0644)
+	_ = os.WriteFile(filepath.Join(toolsDir, "jdk", "java"), make([]byte, 600), 0755)
+	_ = os.WriteFile(filepath.Join(toolsDir, "mkgmap", "mkgmap.jar"), make([]byte, 200), 0644)
+	_ = os.WriteFile(filepath.Join(toolsDir, "splitter", "splitter.jar"), make([]byte, 100), 0644)
+
+	app := createTestApp()
+	metrics, err := app.GetStorageMetrics()
+	if err != nil {
+		t.Fatalf("GetStorageMetrics error: %v", err)
+	}
+	if metrics.ToolsSize != 900 {
+		t.Errorf("expected ToolsSize 900, got %d", metrics.ToolsSize)
+	}
+	if metrics.MapsSize != 350 {
+		t.Errorf("expected MapsSize 350, got %d", metrics.MapsSize)
+	}
+	if metrics.CacheSize != 120 {
+		t.Errorf("expected CacheSize 120, got %d", metrics.CacheSize)
+	}
+	if metrics.DataPath != tmpRoot {
+		t.Errorf("expected DataPath %q, got %q", tmpRoot, metrics.DataPath)
+	}
+
+	// Full clean (all 5 options enabled)
+	freed, err := app.CleanStorage(StorageCleanOptions{
+		ClearCache:    true,
+		ClearTemp:     true,
+		ClearMaps:     true,
+		ClearTools:    true,
+		ClearSettings: true,
+	})
+	if err != nil {
+		t.Fatalf("CleanStorage error: %v", err)
+	}
+	if freed < 1410 {
+		t.Errorf("expected freed >= 1410 (120+40+350+900), got %d", freed)
+	}
+
+	// Verify standalone data root directory was completely removed (zero traces left)
+	if _, err := os.Stat(tmpRoot); !os.IsNotExist(err) {
+		t.Errorf("expected standalone data root %s to be completely removed, got err: %v", tmpRoot, err)
+	}
+}
+
 func TestCopyFile(t *testing.T) {
 	tempDir := t.TempDir()
 	srcPath := filepath.Join(tempDir, "source.txt")
@@ -898,6 +960,7 @@ func TestCopyFile(t *testing.T) {
 }
 
 func TestExportMapValidation(t *testing.T) {
+	t.Setenv("ZIMAP_HOME", t.TempDir())
 	outputDir, err := setup.OutputDirectory()
 	if err != nil {
 		t.Fatalf("setup.OutputDirectory error: %v", err)
@@ -1058,6 +1121,75 @@ func TestCheckForUpdateWithServer(t *testing.T) {
 	_, err = app.CheckForUpdate()
 	if err == nil {
 		t.Errorf("expected error on malformed json, got nil")
+	}
+
+	// 6. 403 Rate Limit falls back to GitHub web endpoints (redirect + atom + expanded_assets)
+	origWebURL := releasesWebBaseURL
+	defer func() { releasesWebBaseURL = origWebURL }()
+
+	ts403 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
+	}))
+	defer ts403.Close()
+
+	var tsWeb *httptest.Server
+	tsWeb = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/releases/latest":
+			w.Header().Set("Location", tsWeb.URL+"/releases/tag/v2.5.0")
+			w.WriteHeader(http.StatusFound)
+		case "/releases.atom":
+			w.Header().Set("Content-Type", "application/atom+xml")
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <id>tag:github.com,2008:Repository/1/v2.5.0</id>
+    <link rel="alternate" type="text/html" href="` + tsWeb.URL + `/releases/tag/v2.5.0"/>
+    <title>ZiMap 2.5.0</title>
+    <content type="html">&lt;p&gt;Rate-limit resilient release notes&lt;/p&gt;</content>
+  </entry>
+</feed>`))
+		case "/releases/expanded_assets/v2.5.0":
+			w.Header().Set("Content-Type", "text/html")
+			_, _ = w.Write([]byte(`<ul>
+<li class="Box-row">
+  <a href="/Ziviy/zimap/releases/download/v2.5.0/ZiMap-macos-arm64.zip">ZiMap-macos-arm64.zip</a>
+  <span>8.88 MB</span>
+</li>
+<li class="Box-row">
+  <a href="/Ziviy/zimap/releases/download/v2.5.0/ZiMap-macos-amd64.zip">ZiMap-macos-amd64.zip</a>
+  <span>9.5 MB</span>
+</li>
+<li class="Box-row">
+  <a href="/Ziviy/zimap/releases/download/v2.5.0/ZiMap-windows-amd64.zip">ZiMap-windows-amd64.zip</a>
+  <span>6.65 MB</span>
+</li>
+</ul>`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer tsWeb.Close()
+
+	releasesLatestURL = ts403.URL
+	releasesWebBaseURL = tsWeb.URL
+
+	infoFallback, err := app.CheckForUpdate()
+	if err != nil {
+		t.Fatalf("expected 403 to succeed via web fallback, got error: %v", err)
+	}
+	if !infoFallback.IsNewer {
+		t.Errorf("expected IsNewer=true from web fallback")
+	}
+	if infoFallback.Version != "v2.5.0" {
+		t.Errorf("expected Version 'v2.5.0', got %q", infoFallback.Version)
+	}
+	if !strings.Contains(infoFallback.ReleaseNotes, "Rate-limit resilient release notes") {
+		t.Errorf("expected ReleaseNotes from Atom feed, got %q", infoFallback.ReleaseNotes)
+	}
+	if !infoFallback.CanAutoUpdate || infoFallback.AssetName == "" || infoFallback.AssetSize <= 0 {
+		t.Errorf("expected matched asset from expanded_assets, got: %+v", infoFallback)
 	}
 }
 
@@ -1247,8 +1379,8 @@ func TestCheckTools(t *testing.T) {
 func TestGetAppVersion(t *testing.T) {
 	app := NewApp()
 	ver := app.GetAppVersion()
-	if ver != "0.0.3" {
-		t.Errorf("GetAppVersion() = %q, want '0.0.3'", ver)
+	if ver != "0.0.4" {
+		t.Errorf("GetAppVersion() = %q, want '0.0.4'", ver)
 	}
 }
 
@@ -1298,8 +1430,8 @@ func TestSimulateUpdateLifecycle(t *testing.T) {
 	if !info.CanAutoUpdate {
 		t.Errorf("expected CanAutoUpdate to be true for simulated update")
 	}
-	if info.CurrentVersion != "0.0.3" {
-		t.Errorf("expected CurrentVersion '0.0.3', got %q", info.CurrentVersion)
+	if info.CurrentVersion != "0.0.4" {
+		t.Errorf("expected CurrentVersion '0.0.4', got %q", info.CurrentVersion)
 	}
 
 	// Test CancelUpdate when idle

@@ -462,11 +462,33 @@ export namespace main {
 		}
 	}
 	
+	export class StorageCleanOptions {
+	    clearCache: boolean;
+	    clearTemp: boolean;
+	    clearMaps: boolean;
+	    clearTools: boolean;
+	    clearSettings: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new StorageCleanOptions(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.clearCache = source["clearCache"];
+	        this.clearTemp = source["clearTemp"];
+	        this.clearMaps = source["clearMaps"];
+	        this.clearTools = source["clearTools"];
+	        this.clearSettings = source["clearSettings"];
+	    }
+	}
 	export class StorageMetrics {
 	    cacheSize: number;
 	    tempSize: number;
 	    mapsSize: number;
+	    toolsSize: number;
 	    totalSize: number;
+	    dataPath: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new StorageMetrics(source);
@@ -477,7 +499,9 @@ export namespace main {
 	        this.cacheSize = source["cacheSize"];
 	        this.tempSize = source["tempSize"];
 	        this.mapsSize = source["mapsSize"];
+	        this.toolsSize = source["toolsSize"];
 	        this.totalSize = source["totalSize"];
+	        this.dataPath = source["dataPath"];
 	    }
 	}
 	export class ToolDetail {

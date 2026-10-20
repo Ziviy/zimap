@@ -30,6 +30,10 @@ export function CheckTools() {
   return window['go']['main']['App']['CheckTools']();
 }
 
+export function CleanStorage(arg1) {
+  return window['go']['main']['App']['CleanStorage'](arg1);
+}
+
 export function ClearTempAndCacheFiles(arg1, arg2) {
   return window['go']['main']['App']['ClearTempAndCacheFiles'](arg1, arg2);
 }
@@ -128,6 +132,10 @@ export function OpenURL(arg1) {
 
 export function RestartApp() {
   return window['go']['main']['App']['RestartApp']();
+}
+
+export function RevealDataDirectory() {
+  return window['go']['main']['App']['RevealDataDirectory']();
 }
 
 export function RevealDevicePath(arg1) {

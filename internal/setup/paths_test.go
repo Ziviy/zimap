@@ -108,3 +108,91 @@ func TestFindProjectRoot(t *testing.T) {
 	_ = emptyDir
 	_ = foundRoot2
 }
+
+func TestDefaultDataDirectoryPerOS(t *testing.T) {
+	// 1. Darwin
+	darwinDir, err := defaultDataDirectory("darwin")
+	if err != nil {
+		t.Fatalf("defaultDataDirectory(darwin) error: %v", err)
+	}
+	if filepath.Base(darwinDir) != "ZiMap" {
+		t.Errorf("expected base 'ZiMap' for darwin, got %q", darwinDir)
+	}
+
+	// 2. Windows with LOCALAPPDATA
+	winBase := filepath.Join(t.TempDir(), "AppData", "Local")
+	t.Setenv("LOCALAPPDATA", winBase)
+	winDir, err := defaultDataDirectory("windows")
+	if err != nil {
+		t.Fatalf("defaultDataDirectory(windows) error: %v", err)
+	}
+	wantWin := filepath.Join(winBase, "ZiMap")
+	if winDir != wantWin {
+		t.Errorf("defaultDataDirectory(windows) = %q, want %q", winDir, wantWin)
+	}
+
+	// 3. Linux with XDG_DATA_HOME
+	xdgBase := filepath.Join(t.TempDir(), "xdg-share")
+	t.Setenv("XDG_DATA_HOME", xdgBase)
+	linuxDir, err := defaultDataDirectory("linux")
+	if err != nil {
+		t.Fatalf("defaultDataDirectory(linux) error: %v", err)
+	}
+	wantLinux := filepath.Join(xdgBase, "ZiMap")
+	if linuxDir != wantLinux {
+		t.Errorf("defaultDataDirectory(linux) = %q, want %q", linuxDir, wantLinux)
+	}
+}
+
+func TestDetectPortableDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	fakeExe := filepath.Join(tmpDir, "ZiMap.exe")
+
+	// 1. Without portable marker or folder
+	if _, ok := detectPortableDir(fakeExe); ok {
+		t.Fatalf("expected detectPortableDir=false when no marker or folder exists")
+	}
+
+	// 2. With .portable marker file
+	marker := filepath.Join(tmpDir, ".portable")
+	if err := os.WriteFile(marker, []byte("1"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	gotDir, ok := detectPortableDir(fakeExe)
+	if !ok {
+		t.Fatalf("expected detectPortableDir=true when .portable file exists")
+	}
+	wantPortable := filepath.Join(tmpDir, "zimap-data")
+	if gotDir != wantPortable {
+		t.Errorf("detectPortableDir = %q, want %q", gotDir, wantPortable)
+	}
+	_ = os.Remove(marker)
+
+	// 3. With zimap-data directory
+	if err := os.MkdirAll(wantPortable, 0755); err != nil {
+		t.Fatal(err)
+	}
+	gotDir2, ok2 := detectPortableDir(fakeExe)
+	if !ok2 || gotDir2 != wantPortable {
+		t.Errorf("detectPortableDir with zimap-data dir = (%q, %v), want (%q, true)", gotDir2, ok2, wantPortable)
+	}
+
+	// 4. Inside macOS .app bundle must never trigger portable dir
+	bundleExe := filepath.Join(tmpDir, "ZiMap.app", "Contents", "MacOS", "ZiMap")
+	if _, ok := detectPortableDir(bundleExe); ok {
+		t.Errorf("expected detectPortableDir=false inside .app bundle")
+	}
+}
+
+func TestDataDirectoryStandaloneWithoutEnv(t *testing.T) {
+	t.Setenv("ZIMAP_HOME", "")
+	t.Setenv("GARMIN_MAP_HOME", "")
+
+	dir, err := DataDirectory()
+	if err != nil {
+		t.Fatalf("DataDirectory() error: %v", err)
+	}
+	if filepath.Base(dir) != "ZiMap" && filepath.Base(dir) != "zimap-data" {
+		t.Errorf("expected DataDirectory() to end with ZiMap or zimap-data, got %q", dir)
+	}
+}

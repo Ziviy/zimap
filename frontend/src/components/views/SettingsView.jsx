@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, CheckCircle2, AlertCircle, RefreshCw, Trash2, Sparkles } from 'lucide-react';
+import { Bell, CheckCircle2, AlertCircle, RefreshCw, Trash2, Sparkles, FolderOpen } from 'lucide-react';
 import { formatBytes } from '../../utils/formatters';
 import * as WailsApp from '../../../wailsjs/go/main/App';
 
@@ -280,7 +280,7 @@ export const SettingsView = ({
               <span className="settings-label-title">{t('storage.title')}</span>
               <span className="settings-label-subtitle">{t('storage.subtitle')}</span>
             </div>
-            <div className="settings-value" style={{ flexDirection: 'column', alignItems: 'stretch', width: '100%', maxWidth: 440 }}>
+            <div className="settings-value" style={{ flexDirection: 'column', alignItems: 'stretch', width: '100%', maxWidth: 460 }}>
               <div className="storage-metrics-grid">
                 <div className="storage-metric-card">
                   <span className="storage-metric-lbl">{t('storage.cacheLabel')}</span>
@@ -297,8 +297,27 @@ export const SettingsView = ({
                   <span className="storage-metric-val">{formatBytes(storageMetrics?.mapsSize || 0)}</span>
                   <span className="storage-metric-desc">{t('storage.mapsDesc')}</span>
                 </div>
+                <div className="storage-metric-card">
+                  <span className="storage-metric-lbl">{t('storage.toolsLabel')}</span>
+                  <span className="storage-metric-val">{formatBytes(storageMetrics?.toolsSize || 0)}</span>
+                  <span className="storage-metric-desc">{t('storage.toolsDesc')}</span>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+              {storageMetrics?.dataPath && (
+                <div className="storage-datapath-row" title={storageMetrics.dataPath}>
+                  <span className="storage-datapath-lbl">{t('storage.dataPathLabel')}</span>
+                  <code className="storage-datapath-val">{storageMetrics.dataPath}</code>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4, flexWrap: 'wrap' }}>
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={() => WailsApp.RevealDataDirectory && WailsApp.RevealDataDirectory()}
+                  title={storageMetrics?.dataPath || t('storage.openDataDirBtn')}
+                >
+                  <FolderOpen size={12} style={{ marginRight: 4 }} />
+                  {t('storage.openDataDirBtn')}
+                </button>
                 <button 
                   className="btn-secondary btn-sm"
                   onClick={onRefreshMetrics}
@@ -326,7 +345,7 @@ export const SettingsView = ({
           <div className="settings-row">
             <div className="settings-label">
               <span className="settings-label-title">{t('settings.aboutInfo')}</span>
-              <span className="settings-label-subtitle">ZiMap Downloader {appVersion || '0.0.3'} • by Ziviy</span>
+              <span className="settings-label-subtitle">ZiMap Downloader {appVersion || '0.0.4'} • by Ziviy</span>
             </div>
             <div className="settings-value" style={{ display: 'flex', gap: 8 }}>
               {onSimulateUpdate && (

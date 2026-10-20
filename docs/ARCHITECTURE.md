@@ -65,7 +65,7 @@ All root `app*.go` files belong to **one `package main` and one `App` service**,
 | [app_device.go](../app_device.go) | Desktop adapter for detection, protected deletion, eject/reveal, freshness, single/batch sync and cancellation. Converts `OutputItem` into device-local map DTOs. Routes `mtp://` paths to MTP. `GetConnectedGarminDevices`, `GetGarminUSBStatus` and `EjectGarminDevice` are compatibility aliases. |
 | [app_tools.go](../app_tools.go) | `CheckTools`, `UpdateTools`, system/version information and browser opening. Converts setup detection into GUI status. Tool-update stdout is forwarded as `tools:log`. |
 | [app_updater.go](../app_updater.go) | Release DTOs, version comparison, platform/architecture asset matching, `CheckForUpdate`, asynchronous `InstallUpdate`, cancellation, simulation, extraction, replacement and restart. Also contains directory-copy helpers and backend byte/ETA formatting. |
-| [app_storage.go](../app_storage.go) | `GetStorageMetrics`, `ClearTempAndCacheFiles`: account for maps/cache/workspaces and remove recognized temporary/cache entries. Preserves proxy configuration and map files; blocks temporary cleanup while a conversion slot is occupied. |
+| [app_storage.go](../app_storage.go) | `GetStorageMetrics`, `CleanStorage`, `ClearTempAndCacheFiles`, `RevealDataDirectory`: account for maps/cache/tools/workspaces and remove selected storage categories (cache, temp, maps, tools, settings), removing empty root directories on a full clean; blocks cleanup while a conversion slot is occupied. |
 | [app_proxy.go](../app_proxy.go) | `GetProxy`/`SetProxy`: validate HTTP/HTTPS/SOCKS5 proxy URLs, persist JSON, update the shared downloader configuration. |
 | [app_notify.go](../app_notify.go), `app_notify_darwin.go`, `app_notify_other.go` | Native notifications via `UNUserNotificationCenter` (macOS `.app` bundle, cgo) with AppleScript fallback, PowerShell (Windows), or `notify-send` (Linux). OS delivery is separate from browser notifications in the frontend. |
 
@@ -178,7 +178,7 @@ The sidecar supports `detect`, `list-maps`, `upload`, `delete`, `check-conflicts
 
 ### Application and tool updates
 
-Application self-update checks GitHub releases, matches an OS/architecture asset, downloads/extracts to a temporary workspace, locates the payload and replaces the bundle/executable with backup handling. macOS extraction prefers `ditto` to preserve bundles; restart launches the new app and quits the current process. Asset names in release CI must stay compatible with `scoreAsset`.
+Application self-update checks GitHub releases via the REST API (honoring `GITHUB_TOKEN`/`GH_TOKEN` if present) and automatically falls back to GitHub web release endpoints (`/releases/latest` redirect, `/releases.atom`, and `/releases/expanded_assets/<tag>`) when unauthenticated REST requests hit HTTP 403/429 IP rate limits. It matches an OS/architecture asset, downloads/extracts to a temporary workspace, locates the payload and replaces the bundle/executable with backup handling. macOS extraction prefers `ditto` to preserve bundles; restart launches the new app and quits the current process. Asset names in release CI must stay compatible with `scoreAsset`.
 
 Tool updates are separate: `setup.Tools` declares Java/mkgmap/splitter artifacts; staged downloads are validated before replacing installations. `CheckTools` reports missing/invalid tools; it does not install them. The GUI calls `UpdateTools` or the CLI calls `update` to install/repair them.
 
@@ -186,12 +186,15 @@ Tool updates are separate: `setup.Tools` declares Java/mkgmap/splitter artifacts
 
 There is no database. Maps/metadata, cache/proxy JSON and managed binaries are filesystem state; preferences are browser `localStorage`; jobs/caches also have in-memory state.
 
-[internal/setup/paths.go](../internal/setup/paths.go) resolves the mutable data root in this order:
+[internal/setup/paths.go](../internal/setup/paths.go) resolves the mutable data root (`ProjectRoot` / `DataDirectory`) in this order:
 
 1. `ZIMAP_HOME`, then legacy `GARMIN_MAP_HOME` (converted to an absolute path).
-2. Nearest ancestor with `go.mod`, starting at the working directory.
-3. Nearest ancestor with `go.mod`, starting at the executable's directory.
-4. Working directory fallback. **The planned Application Support/AppData/private-map layout is not implemented yet.**
+2. Portable directory `<exeDir>/zimap-data` when a `.portable` marker file or `zimap-data/` directory exists alongside the executable (outside macOS `.app` bundles).
+3. OS-standard private application data directory:
+   - macOS (`darwin`): `~/Library/Application Support/ZiMap`
+   - Windows (`windows`): `%LOCALAPPDATA%\ZiMap` (fallback `%APPDATA%\ZiMap` or `<exeDir>\zimap-data`)
+   - Linux / Unix: `$XDG_DATA_HOME/ZiMap` or `~/.local/share/ZiMap` (fallback `os.UserConfigDir()/ZiMap`)
+4. Working directory fallback if OS directories cannot be determined.
 
 Relative to that root: `output/` holds maps/metadata/workspaces, `cache/` holds provider indexes and `proxy-config.json`, and `tools/` holds managed runtimes/JARs. Managed Java is preferred over `PATH`; mkgmap/splitter resolve from configured distributions. Tool paths/version URLs are declared in `internal/setup/tools.go`, not Wails configuration.
 

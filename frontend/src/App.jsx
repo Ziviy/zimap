@@ -102,7 +102,7 @@ function App() {
   };
 
   // Self-update state (Task 17 & In-App Updater)
-  const [appVersion, setAppVersion] = useState('0.0.3');
+  const [appVersion, setAppVersion] = useState('0.0.4');
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
@@ -133,7 +133,7 @@ function App() {
         setUpdateStatus({ stage: 'idle', progress: 0, metrics: null, error: null });
         setUpdateModalOpen(true);
       } else {
-        const ver = info?.currentVersion || appVersion || '0.0.3';
+        const ver = info?.currentVersion || appVersion || '0.0.4';
         showToast(`${t('update.upToDate')} (${ver})`, 'success');
       }
     } catch (err) {
@@ -202,8 +202,8 @@ function App() {
     openExternalURL(url || 'https://github.com/Ziviy/zimap/releases');
   };
 
-  // Storage Metrics & Cleaning state (Task 48)
-  const [storageMetrics, setStorageMetrics] = useState({ cacheSize: 0, tempSize: 0, mapsSize: 0, totalSize: 0 });
+  // Storage Metrics & Cleaning state (Task 48 & Task 46)
+  const [storageMetrics, setStorageMetrics] = useState({ cacheSize: 0, tempSize: 0, mapsSize: 0, toolsSize: 0, totalSize: 0, dataPath: '' });
   const [loadingMetrics, setLoadingMetrics] = useState(false);
   const [cleanModalOpen, setCleanModalOpen] = useState(false);
   const [cleaningStorage, setCleaningStorage] = useState(false);
@@ -222,30 +222,64 @@ function App() {
     }
   };
 
-  const handleConfirmCleanStorage = async (clearCache, clearTemp) => {
+  const handleConfirmCleanStorage = async (cleanOptionsOrCache, legacyClearTemp) => {
+    const opts = typeof cleanOptionsOrCache === 'object' && cleanOptionsOrCache !== null
+      ? {
+          clearCache: Boolean(cleanOptionsOrCache.clearCache),
+          clearTemp: Boolean(cleanOptionsOrCache.clearTemp),
+          clearMaps: Boolean(cleanOptionsOrCache.clearMaps),
+          clearTools: Boolean(cleanOptionsOrCache.clearTools),
+          clearSettings: Boolean(cleanOptionsOrCache.clearSettings),
+        }
+      : {
+          clearCache: Boolean(cleanOptionsOrCache),
+          clearTemp: Boolean(legacyClearTemp),
+          clearMaps: false,
+          clearTools: false,
+          clearSettings: false,
+        };
+
     setCleaningStorage(true);
     try {
       let freed = 0;
-      if (WailsApp.ClearTempAndCacheFiles) {
-        freed = await WailsApp.ClearTempAndCacheFiles(clearCache, clearTemp);
+      if (WailsApp.CleanStorage) {
+        freed = await WailsApp.CleanStorage(opts);
+      } else if (WailsApp.ClearTempAndCacheFiles) {
+        freed = await WailsApp.ClearTempAndCacheFiles(opts.clearCache, opts.clearTemp);
       }
+
+      if (opts.clearSettings) {
+        setTheme('light');
+        setHeap('4');
+        setDefaultSource('geofabrik');
+        setDetailLevel('standard');
+        setNotificationsEnabled(true);
+        localStorage.removeItem('zimap_theme');
+        localStorage.removeItem('zimap_language');
+        localStorage.removeItem('zimap_heap');
+        localStorage.removeItem('zimap_default_source');
+        localStorage.removeItem('zimap_detail');
+        localStorage.removeItem('zimap_notifications_enabled');
+        localStorage.removeItem('zimap_bbbike_style');
+      }
+
       setCleanModalOpen(false);
       await refreshStorageMetrics();
 
-      if (freed > 0) {
+      if (freed > 0 || opts.clearSettings) {
         showToast(t('storage.freedSuccess').replace('{size}', formatBytes(freed)), 'success');
       } else {
         showToast(t('storage.alreadyClean'), 'info');
       }
 
-      if (clearCache) {
-        loadCatalog(true, activeProvider);
-      }
-      if (clearTemp) {
+      if (opts.clearTemp || opts.clearMaps) {
         refreshOutputs();
       }
+      if (opts.clearTools) {
+        refreshTools(false);
+      }
     } catch (err) {
-      console.error('ClearTempAndCacheFiles error:', err);
+      console.error('CleanStorage error:', err);
       showToast(`${t('storage.cleanError')}: ${err?.message || err}`, 'error');
     } finally {
       setCleaningStorage(false);
@@ -755,6 +789,7 @@ function App() {
         await WailsApp.UpdateTools();
         setToolsLogs(prev => [...prev, 'Инструменты успешно обновлены!']);
         refreshTools();
+        refreshStorageMetrics();
       }
     } catch (e) {
       setToolsLogs(prev => [...prev, `Ошибка обновления: ${e}`]);
@@ -866,6 +901,7 @@ function App() {
     if (WailsApp.DeleteOutput) {
       await WailsApp.DeleteOutput(path);
       await refreshOutputs();
+      await refreshStorageMetrics();
     }
   };
 

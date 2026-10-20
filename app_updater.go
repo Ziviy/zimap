@@ -3,12 +3,19 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
+	"errors"
 	"fmt"
+	"html"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -211,7 +218,30 @@ func findMatchingAsset(assets []GitHubAsset, goos, goarch string) *GitHubAsset {
 	return nil
 }
 
-var releasesLatestURL = "https://api.github.com/repos/Ziviy/zimap/releases/latest"
+const (
+	defaultReleasesLatestURL = "https://api.github.com/repos/Ziviy/zimap/releases/latest"
+	defaultReleasesWebURL    = "https://github.com/Ziviy/zimap"
+)
+
+var (
+	releasesLatestURL  = defaultReleasesLatestURL
+	releasesWebBaseURL = defaultReleasesWebURL
+	errReleaseNotFound = errors.New("release not found")
+)
+
+func noUpdateAvailableInfo() *UpdateInfo {
+	return &UpdateInfo{
+		CurrentVersion: CurrentAppVersion,
+		Version:        CurrentAppVersion,
+		ReleaseNotes:   "",
+		DownloadURL:    "https://github.com/Ziviy/zimap/releases",
+		AssetURL:       "",
+		AssetName:      "",
+		AssetSize:      0,
+		IsNewer:        false,
+		CanAutoUpdate:  false,
+	}
+}
 
 func (a *App) CheckForUpdate() (*UpdateInfo, error) {
 	parentCtx := a.ctx
@@ -221,48 +251,72 @@ func (a *App) CheckForUpdate() (*UpdateInfo, error) {
 	ctx, cancel := context.WithTimeout(parentCtx, 15*time.Second)
 	defer cancel()
 
-	url := releasesLatestURL
+	apiURL := releasesLatestURL
 	if custom := os.Getenv("ZIMAP_UPDATE_URL"); custom != "" {
-		url = custom
+		apiURL = custom
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "ZiMap-Downloader/"+CurrentAppVersion)
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	if token := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	} else if token := strings.TrimSpace(os.Getenv("GH_TOKEN")); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	client := download.New(nil).Client
+	canFallbackToWeb := (apiURL == defaultReleasesLatestURL || releasesWebBaseURL != defaultReleasesWebURL) && releasesWebBaseURL != ""
+
+	var rel GitHubRelease
 	resp, err := client.Do(req)
 	if err != nil {
+		if canFallbackToWeb {
+			webRel, webErr := fetchLatestReleaseFromWeb(ctx, client, releasesWebBaseURL)
+			if errors.Is(webErr, errReleaseNotFound) {
+				return noUpdateAvailableInfo(), nil
+			}
+			if webErr == nil && webRel != nil {
+				rel = *webRel
+				return buildUpdateInfo(rel), nil
+			}
+		}
 		return nil, fmt.Errorf("failed to check for updates: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return &UpdateInfo{
-			CurrentVersion: CurrentAppVersion,
-			Version:        CurrentAppVersion,
-			ReleaseNotes:   "",
-			DownloadURL:    "https://github.com/Ziviy/zimap/releases",
-			AssetURL:       "",
-			AssetName:      "",
-			AssetSize:      0,
-			IsNewer:        false,
-			CanAutoUpdate:  false,
-		}, nil
+		return noUpdateAvailableInfo(), nil
+	}
+
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
+		if canFallbackToWeb {
+			webRel, webErr := fetchLatestReleaseFromWeb(ctx, client, releasesWebBaseURL)
+			if errors.Is(webErr, errReleaseNotFound) {
+				return noUpdateAvailableInfo(), nil
+			}
+			if webErr == nil && webRel != nil {
+				return buildUpdateInfo(*webRel), nil
+			}
+		}
+		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
 	}
 
-	var rel GitHubRelease
 	if err := json.NewDecoder(resp.Body).Decode(&rel); err != nil {
 		return nil, fmt.Errorf("failed to parse release information: %w", err)
 	}
 
+	return buildUpdateInfo(rel), nil
+}
+
+func buildUpdateInfo(rel GitHubRelease) *UpdateInfo {
 	currentForCompare := strings.TrimSpace(strings.TrimSuffix(CurrentAppVersion, "BETA"))
 	isNewer := isVersionNewer(rel.TagName, currentForCompare)
 	downloadURL := rel.HTMLURL
@@ -292,7 +346,241 @@ func (a *App) CheckForUpdate() (*UpdateInfo, error) {
 		AssetSize:      assetSize,
 		IsNewer:        isNewer,
 		CanAutoUpdate:  canAuto,
-	}, nil
+	}
+}
+
+func fetchLatestReleaseFromWeb(ctx context.Context, client *http.Client, webBaseURL string) (*GitHubRelease, error) {
+	base := strings.TrimRight(webBaseURL, "/")
+	noRedirectClient := *client
+	noRedirectClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
+	latestReq, err := http.NewRequestWithContext(ctx, "GET", base+"/releases/latest", nil)
+	if err != nil {
+		return nil, err
+	}
+	latestReq.Header.Set("User-Agent", "ZiMap-Downloader/"+CurrentAppVersion)
+	latestReq.Header.Set("Accept", "text/html,application/xhtml+xml")
+
+	resp, err := noRedirectClient.Do(latestReq)
+	if err != nil {
+		return nil, err
+	}
+	_ = resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, errReleaseNotFound
+	}
+
+	loc := resp.Header.Get("Location")
+	if loc == "" && resp.Request != nil && resp.Request.URL != nil {
+		loc = resp.Request.URL.String()
+	}
+
+	const tagMarker = "/releases/tag/"
+	idx := strings.Index(loc, tagMarker)
+	if idx == -1 {
+		if strings.HasSuffix(strings.TrimRight(loc, "/"), "/releases") {
+			return nil, errReleaseNotFound
+		}
+		return nil, fmt.Errorf("unexpected redirect location from releases/latest: %q", loc)
+	}
+
+	tagPart := loc[idx+len(tagMarker):]
+	if qIdx := strings.IndexAny(tagPart, "?#"); qIdx != -1 {
+		tagPart = tagPart[:qIdx]
+	}
+	tagPart = strings.Trim(tagPart, "/")
+	if decoded, decErr := url.PathUnescape(tagPart); decErr == nil && decoded != "" {
+		tagPart = decoded
+	}
+	if tagPart == "" {
+		return nil, errReleaseNotFound
+	}
+
+	rel := &GitHubRelease{
+		TagName: tagPart,
+		Name:    "ZiMap " + tagPart,
+		HTMLURL: base + "/releases/tag/" + url.PathEscape(tagPart),
+	}
+
+	populateReleaseNotesFromAtom(ctx, client, base+"/releases.atom", rel)
+	rel.Assets = fetchExpandedAssetsFromWeb(ctx, client, base, tagPart)
+	if len(rel.Assets) == 0 {
+		for _, name := range []string{
+			"ZiMap-macos-arm64.zip",
+			"ZiMap-macos-amd64.zip",
+			"ZiMap-windows-amd64.zip",
+			"ZiMap-linux-amd64.tar.gz",
+		} {
+			rel.Assets = append(rel.Assets, GitHubAsset{
+				Name:               name,
+				BrowserDownloadURL: fmt.Sprintf("%s/releases/download/%s/%s", base, url.PathEscape(tagPart), name),
+			})
+		}
+	}
+
+	return rel, nil
+}
+
+type githubAtomFeed struct {
+	Entries []struct {
+		ID      string `xml:"id"`
+		Title   string `xml:"title"`
+		Content string `xml:"content"`
+		Link    struct {
+			Href string `xml:"href,attr"`
+		} `xml:"link"`
+	} `xml:"entry"`
+}
+
+var htmlTagRegex = regexp.MustCompile(`<[^>]+>`)
+
+func cleanAtomHTML(raw string) string {
+	s := strings.ReplaceAll(raw, "<br>", "\n")
+	s = strings.ReplaceAll(s, "<br/>", "\n")
+	s = strings.ReplaceAll(s, "<br />", "\n")
+	s = strings.ReplaceAll(s, "</p>", "\n")
+	s = strings.ReplaceAll(s, "</li>", "\n")
+	s = strings.ReplaceAll(s, "<li>", "• ")
+	s = htmlTagRegex.ReplaceAllString(s, "")
+	s = html.UnescapeString(s)
+	lines := strings.Split(s, "\n")
+	var cleaned []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			cleaned = append(cleaned, trimmed)
+		}
+	}
+	return strings.Join(cleaned, "\n")
+}
+
+func populateReleaseNotesFromAtom(ctx context.Context, client *http.Client, atomURL string, rel *GitHubRelease) {
+	req, err := http.NewRequestWithContext(ctx, "GET", atomURL, nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("User-Agent", "ZiMap-Downloader/"+CurrentAppVersion)
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return
+	}
+
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	if err != nil {
+		return
+	}
+
+	var feed githubAtomFeed
+	if err := xml.Unmarshal(bodyBytes, &feed); err != nil {
+		return
+	}
+
+	targetSuffix := "/releases/tag/" + rel.TagName
+	for _, entry := range feed.Entries {
+		if strings.HasSuffix(entry.Link.Href, targetSuffix) || strings.HasSuffix(entry.ID, "/"+rel.TagName) {
+			if title := strings.TrimSpace(entry.Title); title != "" {
+				rel.Name = title
+			}
+			if notes := cleanAtomHTML(entry.Content); notes != "" {
+				rel.Body = notes
+			}
+			return
+		}
+	}
+}
+
+var (
+	expandedAssetLinkRegex = regexp.MustCompile(`href="([^"]*/releases/download/[^"]+)"`)
+	humanByteSizeRegex     = regexp.MustCompile(`([0-9]+(?:\.[0-9]+)?)\s*(B|Bytes|KB|MB|GB)\b`)
+)
+
+func parseHumanSizeBytes(raw string) int64 {
+	m := humanByteSizeRegex.FindStringSubmatch(raw)
+	if len(m) < 3 {
+		return 0
+	}
+	val, err := strconv.ParseFloat(m[1], 64)
+	if err != nil || val <= 0 {
+		return 0
+	}
+	switch strings.ToUpper(m[2]) {
+	case "GB":
+		return int64(val * 1024 * 1024 * 1024)
+	case "MB":
+		return int64(val * 1024 * 1024)
+	case "KB":
+		return int64(val * 1024)
+	default:
+		return int64(val)
+	}
+}
+
+func fetchExpandedAssetsFromWeb(ctx context.Context, client *http.Client, base, tag string) []GitHubAsset {
+	expandedURL := fmt.Sprintf("%s/releases/expanded_assets/%s", base, url.PathEscape(tag))
+	req, err := http.NewRequestWithContext(ctx, "GET", expandedURL, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("User-Agent", "ZiMap-Downloader/"+CurrentAppVersion)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
+	if err != nil {
+		return nil
+	}
+
+	baseURLParsed, _ := url.Parse(base)
+	var assets []GitHubAsset
+	seen := make(map[string]bool)
+
+	rows := strings.Split(string(bodyBytes), "<li")
+	for _, row := range rows {
+		linkMatch := expandedAssetLinkRegex.FindStringSubmatch(row)
+		if len(linkMatch) < 2 {
+			continue
+		}
+		href := html.UnescapeString(linkMatch[1])
+		fullURL := href
+		if strings.HasPrefix(href, "/") && baseURLParsed != nil {
+			fullURL = fmt.Sprintf("%s://%s%s", baseURLParsed.Scheme, baseURLParsed.Host, href)
+		}
+
+		u, err := url.Parse(fullURL)
+		if err != nil {
+			continue
+		}
+		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if len(parts) == 0 {
+			continue
+		}
+		name, err := url.PathUnescape(parts[len(parts)-1])
+		if err != nil || name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+
+		assets = append(assets, GitHubAsset{
+			Name:               name,
+			Size:               parseHumanSizeBytes(row),
+			BrowserDownloadURL: fullURL,
+		})
+	}
+
+	return assets
 }
 
 func (a *App) SimulateUpdateCheck() (*UpdateInfo, error) {

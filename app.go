@@ -13,7 +13,7 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-const CurrentAppVersion = "0.0.3"
+const CurrentAppVersion = "0.0.4"
 
 func getCacheDir() string {
 	if dir, err := setup.CacheDirectory(); err == nil && dir != "" {

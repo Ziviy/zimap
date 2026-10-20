@@ -4,8 +4,8 @@ This document tracks planned improvements, bug fixes, and feature additions for 
 
 **Progress Tracker**:
 - **Total Tasks**: 53
-- **Completed**: 51 (`#1`, `#2`, `#3`, `#4`, `#5`, `#6`, `#7`, `#8`, `#9`, `#10`, `#11`, `#12`, `#13`, `#14`, `#15`, `#16`, `#17`, `#18`, `#19`, `#20`, `#21`, `#22`, `#23`, `#24`, `#25`, `#26`, `#27`, `#28`, `#29`, `#30`, `#31`, `#32`, `#33`, `#34`, `#35`, `#36`, `#37`, `#38`, `#39`, `#40`, `#41`, `#42`, `#43`, `#45`, `#47`, `#48`, `#49`, `#50`, `#51`, `#52`, `#53`)
-- **Active / Pending**: 2 (`#44`, `#46`)
+- **Completed**: 52 (`#1`, `#2`, `#3`, `#4`, `#5`, `#6`, `#7`, `#8`, `#9`, `#10`, `#11`, `#12`, `#13`, `#14`, `#15`, `#16`, `#17`, `#18`, `#19`, `#20`, `#21`, `#22`, `#23`, `#24`, `#25`, `#26`, `#27`, `#28`, `#29`, `#30`, `#31`, `#32`, `#33`, `#34`, `#35`, `#36`, `#37`, `#38`, `#39`, `#40`, `#41`, `#42`, `#43`, `#45`, `#46`, `#47`, `#48`, `#49`, `#50`, `#51`, `#52`, `#53`)
+- **Active / Pending**: 1 (`#44`)
 
 ---
 
@@ -33,28 +33,28 @@ This document tracks planned improvements, bug fixes, and feature additions for 
 
 ---
 
-### 46. Self-Contained Storage & Portable Application Packaging
-- **User Requirement**: Package the application into a single standalone container/binary without needing external source code (`go.mod`, git repository, etc.) for both macOS and Windows (portable `.exe`). The application should keep compiled maps hidden in its own internal private storage.
-- **Technical Analysis & Complexity**:
-  - **Complexity: 🟢 Medium (3-4 hours)**.
-  - **Paths & Storage Isolation**:
-    - Current code in `internal/setup/paths.go` looks for `go.mod` in parent directories. In standalone `.app` on macOS (e.g. in `/Applications`) or standalone `.exe` on Windows, `go.mod` does not exist.
-    - Solution: Update `ProjectRoot()` / `DataDirectory()`:
-      - **macOS**: Use standard `~/Library/Application Support/ZiMap/` (`maps/`, `cache/`, `tools/`).
-      - **Windows**: Use `%LOCALAPPDATA%\ZiMap\` (or portable mode: subfolder next to executable if writeable).
-      - Maps are stored in `<DataDir>/maps/` rather than a loose `output/` folder in user directories, keeping them safely managed inside the app.
-  - **Packaging**:
-    - **macOS**: Standalone `ZiMap.app` bundle (self-contained Go binary with embedded frontend dist, can be packaged into DMG or zip).
-    - **Windows**: Standalone portable `ZiMap.exe` that runs directly without an installer, storing cache and downloaded tools in `AppData` or alongside.
-- **Affected Files**:
-  - `internal/setup/paths.go`
-  - `internal/setup/tools.go`
-  - `app.go`
-  - `wails.json`
+## ✅ Completed Tasks & Changelog
+
+### 46. Self-Contained Storage, Portable Application Packaging & Zero-Trace Cleanup [COMPLETED]
+- **Issue**: Previously `ProjectRoot()` in `internal/setup/paths.go` walked parent directories looking for `go.mod` and fell back to `os.Getwd()`, causing standalone `.app` / `.exe` builds to depend on the source repository or create loose `output/` / `cache/` / `tools/` folders in arbitrary working directories. Additionally, the storage cleanup modal only allowed clearing cache and temporary files, leaving downloaded tools (`jdk`, `mkgmap`, `splitter`), compiled maps, and config files behind when uninstalling the application.
+- **Resolution**:
+  - **Private OS Application Storage & Portable Mode (`internal/setup/paths.go`)**:
+    - Updated `ProjectRoot()` and added `DataDirectory()` to resolve mutable application data without needing `go.mod`:
+      1. `ZIMAP_HOME` / `GARMIN_MAP_HOME` environment overrides.
+      2. Portable mode (`<exeDir>/zimap-data`) when a `.portable` marker file or `zimap-data/` folder exists next to the executable outside a `.app` bundle.
+      3. Standard OS private application data directory (`~/Library/Application Support/ZiMap` on macOS, `%LOCALAPPDATA%\ZiMap` on Windows, `$XDG_DATA_HOME/ZiMap` or `~/.local/share/ZiMap` on Linux).
+  - **Extended Storage Metrics & Zero-Trace Cleanup (`app_storage.go`, `StorageCleanModal.jsx`, `SettingsView.jsx`, `App.jsx`)**:
+    - Added `ToolsSize` (`jdk`, `mkgmap`, `splitter`) and `DataPath` to `StorageMetrics`, displayed as a 2×2 metrics grid in Settings with a path bar and «Открыть папку» (`RevealDataDirectory()`) button.
+    - Added `CleanStorage(opts StorageCleanOptions)` supporting 5 selectable categories in `StorageCleanModal`:
+      - Catalog Cache (`clearCache`)
+      - Temporary Build Files (`clearTemp`, including `.zimap-*` and `.update-*` workspaces)
+      - Compiled Maps (`clearMaps`)
+      - Downloaded Build Tools (`clearTools` — JDK, Mkgmap, Splitter)
+      - Application Settings & Proxy Config (`clearSettings` — `proxy-config.json` and `localStorage`)
+    - Added «Выбрать всё (полная очистка)» toggle in `StorageCleanModal`; when all 5 categories are selected, empty subdirectories (`output/`, `cache/`, `tools/`) and the root `ZiMap` data directory are removed via `os.Remove`, leaving zero traces on disk before uninstallation.
+- **Files Modified**: `internal/setup/paths.go`, `internal/setup/paths_test.go`, `app_storage.go`, `app_test.go`, `frontend/src/components/modals/StorageCleanModal.jsx`, `frontend/src/components/views/SettingsView.jsx`, `frontend/src/App.jsx`, `frontend/src/AppleTheme.css`, `frontend/src/i18n.js`, `frontend/wailsjs/go/main/App.js`, `frontend/wailsjs/go/main/App.d.ts`, `frontend/wailsjs/go/models.ts`, `TODO.md`, `AGENTS.md`, `docs/ARCHITECTURE.md`.
 
 ---
-
-## ✅ Completed Tasks & Changelog
 
 ### 39. Application Icon in System Notifications [COMPLETED]
 - **Issue**: macOS notification banners displayed the wrong (generic) icon instead of the ZiMap app icon; the initial `NSUserNotification` cgo attempt did not fix it in practice.

@@ -198,7 +198,7 @@ The binary must function both as a desktop GUI and as a headless CLI tool:
 
 Consult [`TODO.md`](TODO.md) for the active task backlog.
 
-### ✅ Completed Tasks (51 of 53):
+### ✅ Completed Tasks (52 of 53):
 - **macOS Window Dragging & IPC (Task 1)**: Full `--wails-draggable: drag` implementation with clean 48px top strip and non-blocking IPC calls.
 - **Catalog Caching (Task 2)**: Two-tier caching (in-memory + disk cache in `cache/geofabrik-index.json`, 24h TTL) with `ForceRefreshCatalog()`.
 - **Accurate Tools & Java Detection (Task 3)**: `JavaDetails()` and `ToolDetails()` distinguish embedded `tools/jdk` from system Java in `PATH`, showing file paths and check animations.
@@ -249,10 +249,10 @@ Consult [`TODO.md`](TODO.md) for the active task backlog.
 - **Fresh-Install Output Directory Fix (Task 53)**: `ConvertURL`, `runConversion`/`ConvertLocal`, and `saveCompanionMetadata` create `output/` via `os.MkdirAll` before `os.MkdirTemp`/meta writes, eliminating `GetFileAttributesEx ... cannot find the file specified` on fresh standalone installs; nil Wails context tolerated in convert jobs; regression tests added in `app_test.go`.
 - **Native macOS Notification Icon (Task 39)**: `UNUserNotificationCenter` Objective-C bridge (`app_notify_darwin.go`) with foreground banner delegate and `osascript` fallback outside `.app` bundles, plus non-darwin stub (`app_notify_other.go`).
 - **Release Asset Renaming & Version Bump (0.0.2 BETA)**: Release assets renamed `ZiMap-darwin-*` → `ZiMap-macos-*` (CI workflow, Makefile, docs; updater-compatible naming), release workflow security hardening (scoped permissions, env-var template-injection guards, `persist-credentials: false`), and version bump to `0.0.2 BETA`.
+- **Self-Contained Storage, Portable Packaging & Zero-Trace Cleanup (Task 46)**: Private OS data root resolution (`~/Library/Application Support/ZiMap` on macOS, `%LOCALAPPDATA%\ZiMap` on Windows, `$XDG_DATA_HOME/ZiMap` on Linux) and portable `<exeDir>/zimap-data` mode without `go.mod` dependency; 4-card storage metrics including `ToolsSize` and data-folder reveal button; 5-option `CleanStorage` modal (Cache, Temp, Maps, Tools, Settings) capable of removing all application files and empty directories for a clean zero-trace uninstall.
 
-### 🎯 Active Backlog (2 Tasks Remaining):
+### 🎯 Active Backlog (1 Task Remaining):
 - **Output Format Selector (Task 44)**: Support multiple output formats (.img, BaseCamp/MapSource .gmapi).
-- **Self-Contained Storage & Packaging (Task 46)**: Standalone packaging without source code dependencies, hidden internal map storage.
 
 
 

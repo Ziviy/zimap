@@ -19,6 +19,8 @@ export function CheckForUpdate():Promise<main.UpdateInfo>;
 
 export function CheckTools():Promise<main.ToolsStatus>;
 
+export function CleanStorage(arg1:main.StorageCleanOptions):Promise<number>;
+
 export function ClearTempAndCacheFiles(arg1:boolean,arg2:boolean):Promise<number>;
 
 export function ConvertLocal(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
@@ -68,6 +70,8 @@ export function ListOutputs():Promise<Array<main.OutputItem>>;
 export function OpenURL(arg1:string):Promise<void>;
 
 export function RestartApp():Promise<void>;
+
+export function RevealDataDirectory():Promise<void>;
 
 export function RevealDevicePath(arg1:string):Promise<void>;
 
