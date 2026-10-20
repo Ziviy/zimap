@@ -192,6 +192,14 @@ The binary must function both as a desktop GUI and as a headless CLI tool:
 - Use `"SF Mono", Menlo, Consolas` for log terminals and metrics.
 - Keep window drag regions responsive using `--wails-draggable: drag` and `--wails-draggable: none`.
 
+### Rule 6: Version Bumping Checklist
+Whenever bumping the application version (e.g., `+0.0.1`), you **must** update all of the following places in lockstep:
+1. `README.md` — Shields.io version badge (`https://img.shields.io/badge/Status-Beta%20v<version>-orange.svg`).
+2. `app.go` — `CurrentAppVersion` constant.
+3. `wails.json` — `info.productVersion`.
+4. `frontend/src/App.jsx`, `Sidebar.jsx`, `UpdateModal.jsx`, `AboutView.jsx`, `SettingsView.jsx` — default/fallback version strings.
+5. `app_test.go` — `TestGetAppVersion` and `TestSimulateUpdateLifecycle` version assertions.
+
 ---
 
 ## 6. Project Status & Roadmap

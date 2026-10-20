@@ -243,7 +243,7 @@ Test ownership: `app_test.go` covers catalog/output/storage/proxy/updater/BBBike
 - [scripts/build-mtp.sh](../scripts/build-mtp.sh): builds the helper for the target OS/architecture. On macOS it builds/links static libusb, writes `tools/mtp/zimap-mtp`, and copies it into an existing app bundle.
 - [.github/workflows/release.yml](../.github/workflows/release.yml): macOS arm64/amd64 and Windows amd64 builds, ZIP packaging, GitHub publishing. Windows packaging currently contains the main EXE; macOS packaging includes the MTP helper. This workflow builds releases; it does not replace running the unit/race suites.
 - Expected release assets: `ZiMap-macos-arm64.zip`, `ZiMap-macos-amd64.zip`, `ZiMap-windows-amd64.zip`. Preserve this naming contract with `app_updater.go`.
-- Current version identity is split between `CurrentAppVersion` in `app.go` and product metadata in `wails.json`. Check both when changing release/version behavior.
+- Current version identity is split across `CurrentAppVersion` in `app.go`, `info.productVersion` in `wails.json`, the version badge in `README.md`, frontend version fallbacks (`App.jsx`, `Sidebar.jsx`, `UpdateModal.jsx`, `AboutView.jsx`, `SettingsView.jsx`), and version tests in `app_test.go`. Update all of them together when bumping the version.
 
 ## 9. Keep these boundaries intact
 
