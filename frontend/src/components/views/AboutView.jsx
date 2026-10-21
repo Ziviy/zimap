@@ -21,7 +21,7 @@ export const AboutView = ({ t, checkingUpdate, onCheckUpdate, appVersion }) => {
           <div className="about-subtitle">
             {t('about.subtitle') || 'Map Downloader'}
           </div>
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Version {appVersion || '0.0.4'} (Build 2026.1)</div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Version {appVersion || '0.0.5'} (Build 2026.1)</div>
           <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
             <button className="btn-secondary" onClick={() => openLink('https://github.com/Ziviy')}>
               {t('about.author') || 'Author: Ziviy'}

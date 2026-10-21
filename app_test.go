@@ -1379,8 +1379,8 @@ func TestCheckTools(t *testing.T) {
 func TestGetAppVersion(t *testing.T) {
 	app := NewApp()
 	ver := app.GetAppVersion()
-	if ver != "0.0.4" {
-		t.Errorf("GetAppVersion() = %q, want '0.0.4'", ver)
+	if ver != "0.0.5" {
+		t.Errorf("GetAppVersion() = %q, want '0.0.5'", ver)
 	}
 }
 
@@ -1430,8 +1430,8 @@ func TestSimulateUpdateLifecycle(t *testing.T) {
 	if !info.CanAutoUpdate {
 		t.Errorf("expected CanAutoUpdate to be true for simulated update")
 	}
-	if info.CurrentVersion != "0.0.4" {
-		t.Errorf("expected CurrentVersion '0.0.4', got %q", info.CurrentVersion)
+	if info.CurrentVersion != "0.0.5" {
+		t.Errorf("expected CurrentVersion '0.0.5', got %q", info.CurrentVersion)
 	}
 
 	// Test CancelUpdate when idle
@@ -1519,5 +1519,45 @@ func TestSaveCompanionMetadataCreatesMissingOutputDirectory(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(outDir, "fresh-map.meta.json")); err != nil {
 		t.Errorf("expected metadata file to be created: %v", err)
+	}
+}
+
+func TestCreateUpdateWorkspace(t *testing.T) {
+	// 1. With configured home directory
+	tempHome := t.TempDir()
+	t.Setenv("ZIMAP_HOME", tempHome)
+
+	ws1, err := createUpdateWorkspace()
+	if err != nil {
+		t.Fatalf("createUpdateWorkspace failed with ZIMAP_HOME: %v", err)
+	}
+	defer os.RemoveAll(ws1)
+
+	if !strings.HasPrefix(ws1, filepath.Join(tempHome, "cache")) {
+		t.Errorf("expected workspace under cache dir, got: %s", ws1)
+	}
+	if info, err := os.Stat(ws1); err != nil || !info.IsDir() {
+		t.Errorf("expected workspace to be a valid directory, stat: %v", err)
+	}
+
+	// 2. Fallback when cache directory cannot be created (simulate read-only / invalid path)
+	dummyFile := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(dummyFile, []byte("x"), 0644); err != nil {
+		t.Fatalf("failed to create dummy file: %v", err)
+	}
+	t.Setenv("ZIMAP_HOME", dummyFile)
+
+	ws2, err := createUpdateWorkspace()
+	if err != nil {
+		t.Fatalf("createUpdateWorkspace should fall back to os.TempDir: %v", err)
+	}
+	defer os.RemoveAll(ws2)
+
+	if info, err := os.Stat(ws2); err != nil || !info.IsDir() {
+		t.Errorf("expected fallback workspace to be a valid directory, stat: %v", err)
+	}
+	// Verify it's within temp dir
+	if !strings.Contains(ws2, "zimap-update-") {
+		t.Errorf("expected fallback workspace to contain prefix zimap-update-, got: %s", ws2)
 	}
 }

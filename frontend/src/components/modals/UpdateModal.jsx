@@ -53,13 +53,13 @@ export const UpdateModal = ({
             {stage === 'ready' 
               ? (t('update.readyTitle') || 'Обновление готово к установке!') 
               : stage === 'error'
-              ? (t('update.checkError') || 'Ошибка обновления')
+              ? (t('update.errorTitle') || t('update.checkError') || 'Ошибка обновления')
               : (t('update.modalTitle') || 'Доступна новая версия ZiMap')}
           </h3>
 
           <div className="update-badge-row">
             <span className="version-pill">
-              {t('update.currentVersion')}: {updateInfo.currentVersion || appVersion || '0.0.4'}
+              {t('update.currentVersion')}: {updateInfo.currentVersion || appVersion || '0.0.5'}
             </span>
             <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>→</span>
             <span className="version-pill new">

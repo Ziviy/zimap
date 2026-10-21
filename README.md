@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Status-Beta%20v0.0.4-orange.svg" alt="Beta Status" />
+  <img src="https://img.shields.io/badge/Status-Beta%20v0.0.5-orange.svg" alt="Beta Status" />
   <img src="https://img.shields.io/badge/Made%20with-AI-8A2BE2.svg" alt="Made with AI" />
   <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey.svg" alt="Platforms" />
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License" />
@@ -41,8 +41,32 @@
 
 Pre-compiled standalone packages are available on the [GitHub Releases](https://github.com/Ziviy/zimap/releases) page:
 
-- **macOS**: Download `ZiMap-darwin-arm64.zip` (Apple Silicon M1-M4) or `ZiMap-darwin-amd64.zip` (Intel). Extract the archive and drag `ZiMap.app` to your `/Applications` folder.
+- **macOS**: Download `ZiMap-macos-arm64.zip` (Apple Silicon M1-M4) or `ZiMap-macos-amd64.zip` (Intel). Extract the archive and drag `zimap.app` to your `/Applications` folder.
 - **Windows**: Download `ZiMap-windows-amd64.zip`. Extract the archive and run `ZiMap.exe`.
+
+#### macOS Gatekeeper & Apple Quarantine Notice
+Because ZiMap is an open-source project without a paid Apple Developer ID certificate, macOS Gatekeeper will block it upon first launch with an alert:  
+*«Apple не удалось подтвердить, что файл "zimap" не содержит вредоносного ПО...»* (*"Apple cannot verify that 'zimap' does not contain malware"*).
+
+To allow macOS to launch the application:
+
+**Option A (Terminal — Quickest):**
+Clear the `com.apple.quarantine` extended attribute:
+```bash
+# If placed in Applications:
+xattr -cr /Applications/zimap.app
+
+# Or if running directly from Downloads:
+xattr -cr ~/Downloads/zimap.app
+```
+*(Tip: Type `xattr -cr ` with a trailing space in Terminal, then drag and drop `zimap.app` into the Terminal window and press Enter).*
+
+**Option B (System Settings):**
+1. Click **«Готово»** / **Done** on the alert dialog.
+2. Open **System Settings** → **Privacy & Security** (*Системные настройки → Конфиденциальность и безопасность*).
+3. Scroll down to the **Security** section.
+4. You will see: *"zimap was blocked from use..."* (*«Использование "zimap" было заблокировано...»*).
+5. Click **«Подтвердить вход»** / **«Открыть в любом случае»** (*Open Anyway*), enter your Mac password / Touch ID, and choose **«Открыть»** (*Open*).
 
 *Note: The app can download and manage a Java 21 runtime and compilation utilities (`mkgmap`, `splitter`) in a local `tools/` directory. Install or repair them from the Tools screen or with `zimap update`; an existing Java installation in your system PATH can also be used.*
 

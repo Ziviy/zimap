@@ -586,7 +586,7 @@ func fetchExpandedAssetsFromWeb(ctx context.Context, client *http.Client, base, 
 func (a *App) SimulateUpdateCheck() (*UpdateInfo, error) {
 	return &UpdateInfo{
 		CurrentVersion: CurrentAppVersion,
-		Version:        "0.0.4",
+		Version:        "0.0.6",
 		ReleaseNotes:   "• Автоматическое обновление приложения прямо через интерфейс (In-App Update)\n• Реальное отображение скорости загрузки, размера и времени (ETA)\n• Перезапуск приложения в один клик после успешной установки\n• Обновленная версия 0.0.3\n• Исправления и улучшения дизайна Apple HIG",
 		DownloadURL:    "https://github.com/Ziviy/zimap/releases",
 		AssetURL:       "simulate",
@@ -637,18 +637,28 @@ func (a *App) InstallUpdate(assetURL string) error {
 	return nil
 }
 
+func createUpdateWorkspace() (string, error) {
+	if cacheDir, err := setup.CacheDirectory(); err == nil && cacheDir != "" {
+		candidateDir := filepath.Join(cacheDir, fmt.Sprintf("update-%d", time.Now().UnixNano()))
+		if err := os.MkdirAll(candidateDir, 0755); err == nil {
+			return candidateDir, nil
+		}
+	}
+	tempDir, err := os.MkdirTemp("", "zimap-update-*")
+	if err != nil {
+		return "", fmt.Errorf("failed to create update workspace: %w", err)
+	}
+	return tempDir, nil
+}
+
 func (a *App) runRealUpdate(ctx context.Context, assetURL string) error {
 	a.emitEvent("update:stage", "download")
 	a.emitEvent("update:progress", 0)
 	a.emitEvent("update:log", "Downloading update asset: "+assetURL)
 
-	cacheDir, err := setup.CacheDirectory()
-	if err != nil || cacheDir == "" {
-		cacheDir = "cache"
-	}
-	workDir := filepath.Join(cacheDir, fmt.Sprintf("update-%d", time.Now().UnixNano()))
-	if err := os.MkdirAll(workDir, 0755); err != nil {
-		return fmt.Errorf("failed to create update workspace: %w", err)
+	workDir, err := createUpdateWorkspace()
+	if err != nil {
+		return err
 	}
 	defer func() { _ = os.RemoveAll(workDir) }()
 
